@@ -3,11 +3,11 @@
 ## 1. 交接元信息
 
 - 最后更新时间：2026-08-11（Asia/Shanghai）。
-- 当前里程碑：Day 4——结构化 Multi-Agent、Java SSE 代理、只读 Tool、Qdrant 政策引用和 Trace 元数据，**PASS**。
-- Day 1 / Day 2 回归：**PASS**。
+- 当前里程碑：Day 7——测试、Docker 空卷验收、评测、压测与项目包装，**PASS**。
+- Day 1 至 Day 7 已验收回归：**PASS**。
 - Spec 基线：1.0；没有修改冻结架构决策或扩大 P0 范围。
-- Git 状态：仓库已初始化在 `main`，尚无提交；全部项目文件仍为未提交工作区内容。
-- 运行状态：完整 Day 4 开发 Compose 正在运行；所有常驻服务 healthy，一次性 RocketMQ 初始化服务均为预期的 `Exited (0)`。
+- Git 状态：`main` 包含 Day 4 基线提交 `31773e2 feat: complete day 4 agent foundation`；Day 5、Day 6 与 Day 7 的已验收改动由本次完成提交记录，未作重置或清理。
+- 运行状态：完整 Day 7 开发 Compose 正在运行；所有常驻服务 healthy，一次性 RocketMQ 初始化服务均为预期的 `Exited (0)`。
 - 维护责任：本文件只由主 Agent / Coordinator 更新。
 
 本文件记录真实可复现状态，不替代 `SPEC.md` 和专项规范。
@@ -24,6 +24,8 @@
 | Day 3 Tool Gateway | DONE | Service Token、AgentContextToken、参数上限、员工/忙闲/房间/最近会议、草案、审计和重放均通过 |
 | Day 3 SSE/回调边界 | DONE | Java SSE 代理不伪造输出；Python 端点不存在时完整返回 503 `AGENT_UNAVAILABLE`；BOOKING_RESULT 回调骨架默认关闭 |
 | Day 4 Multi-Agent Golden Path 与增强切片 | DONE | 固定为 Supervisor + Requirement/Policy/Scheduling 四个 Agent；确定性 fixture 经 Java SSE 代理完成普通调度与政策引用 Smoke，Run/Step/Tool Call 已持久化 |
+| Day 5 调度、HITL、恢复与 HOT 闭环 | DONE | OR-Tools Top 3、独立验证器、DRAFT/HITL、Redis checkpoint、业务回调与 HOT CONFLICT recovery 均已通过真实 Smoke |
+| Day 6 浏览器业务闭环与会议室管理 | DONE | 聊天 SSE/HITL/安全 Trace、我的会议手动管理、会议室可用性与 ADMIN 管理均已通过公共接口 Smoke 和浏览器验收 |
 
 ## 3. Day 3 完成内容与责任分工
 
@@ -276,3 +278,132 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 - 未完成项均属于后续 Day 5/Day 6 范围：OR-Tools Top 3、独立硬约束验证器、无解分类、`create_booking_draft`、LangGraph interrupt、ACCEPT/EDIT/REJECT、Redis checkpoint、确认与业务结果恢复，以及前端聊天/HITL/Trace 可视化。
 - **Day 5 唯一明确起点：** 从 `agent-service/**` 的候选集合构建、OR-Tools 硬约束/软目标 Top 3 与独立硬约束验证器开始；先完成这三个确定性能力的测试，再进入 Day 5 下午的 draft/HITL/checkpoint 工作。
+
+## 14. Day 5 完成交接（历史状态；已由第 15 节取代）
+
+### 14.1 结论与范围
+
+- **Day 5：PASS。** 已完成并验收 OR-Tools Top 3、独立硬约束验证、无解分类、DRAFT/HITL、Redis checkpoint、确认后的业务结果回调与 HOT 冲突恢复；本轮没有开始 Day 6。
+- 运行时产品 Agent 固定为 4 个：`SupervisorAgent`、`RequirementAgent`、`PolicyAgent`、`SchedulingAgent`。CandidateBuilder、OR-Tools Solver、Validator、Retriever、HITL、Checkpoint 和 Java Tool 都是明确命名的确定性组件，不伪装为 Agent。
+- 浏览器仍只访问 Java `/api/v1/**`；前端没有直连 Python。Python 只访问 Java 白名单 Tool API 和自身 `meeting_agent`/Redis DB 1/Qdrant 数据；Java 没有新增 LLM、Prompt、RAG 或 OR-Tools 实现。
+- Day 4 基线已提交为 `31773e2 feat: complete day 4 agent foundation`。当前工作区保留本轮 Day 5 的未提交改动，未执行 Day 5 提交、重置、清理或卷/数据库删除。
+
+### 14.2 各执行角色完成内容
+
+- **主 Agent / Coordinator：** 裁决并更新 Day 5 API/SSE/恢复契约；将 Compose 默认镜像标签切换到 `day5`，向 Python 注入 DB 0 业务 Redis 与 DB 1 checkpoint Redis 配置，开启安全的 `AGENT_CALLBACK_ENABLED=true` 默认值；新增真实全栈 `scripts/smoke-day5.py`，亲自完成跨服务审查、构建、Compose 健康检查和 Smoke。
+- **Java subagent（`business-service/**`）：** 新增受 JWT/RBAC 保护的 `POST /api/v1/agent/runs/{runId}/resume`（ACCEPT/EDIT/REJECT，EDIT 仅 roomId/startAt）；严格 HTTP/1.1 SSE 字节代理；新增安全的 public `GET /api/v1/agent/runs/{runId}` 和 `/trace` 代理；完成 `BOOKING_RESULT` 回调，使用业务记录 owner 的当前角色重签 Java AgentContext，非 2xx 由既有 MQ consumer 重投。Trace 会递归剥离 confirmation token、Authorization、JWT、Service Token 等敏感字段。
+- **Python subagent（`agent-service/**`）：** 新增确定性 CandidateBuilder、CP-SAT one-hot/no-good Top 3 求解器、独立 Validator 和稳定无解分类；严格 Tool/模型结构化校验与有限重试；以 Redis 字符串实现真实 LangGraph `BaseCheckpointSaver`（DB 1，24 小时 TTL，fresh saver 可恢复 `interrupt`/`Command(resume=...)`）；接入 DRAFT/HITL/恢复视图/业务回调和 HOT CONFLICT 后重新读取、重求解、重新 Draft 的闭环。所有自动测试均使用 fixture/HTTP mock，不调用真实 DeepSeek。
+- **Frontend/Mock：** 本轮按目录所有权未修改产品代码；仍实际执行 type-check 与生产 build 回归。
+
+### 14.3 关键文件
+
+- 契约、部署与 Smoke：`docs/05-data-and-api-spec.md`、`docs/06-docker-deployment.md`、`.env.example`、`compose.yaml`、`scripts/smoke-day5.py`。
+- Python：`agent-service/app/scheduling/solver.py`、`agent-service/app/schemas/agent.py`、`agent-service/app/checkpoints/redis.py`、`agent-service/app/workflow.py`、`agent-service/app/api/internal.py`、`agent-service/app/tools/java.py`、`agent-service/tests/test_schedule_solver.py`、`agent-service/tests/test_redis_checkpoint.py`。
+- Java：`business-service/src/main/java/com/example/meeting/agentgateway/api/AgentGatewayController.java`、`business-service/src/main/java/com/example/meeting/agentgateway/api/AgentRunResumeRequest.java`、`business-service/src/main/java/com/example/meeting/agentgateway/client/AgentSseProxyService.java`、`business-service/src/main/java/com/example/meeting/agentgateway/client/AgentBusinessResultCallback.java`、以及相应 integration tests。
+
+### 14.4 可复现验证记录
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| `uv sync --frozen --group dev` | PASS | 锁定的 OR-Tools 9.14.6206 与 Redis 5.2.1 同步成功。 |
+| `uv run ruff check .` | PASS | 全部检查通过。 |
+| `uv run mypy app` | PASS | 31 个源文件无类型错误。 |
+| `uv run pytest` | PASS | 48 passed；仅有上游 LangGraph pending-deprecation warning。 |
+| `docker run --rm -v "${PWD}\\business-service:/workspace" -w /workspace maven:3.9.11-eclipse-temurin-21 ./mvnw -B -ntp verify` | PASS | 44 tests，0 failures/errors/skips，Spotless 与 Jar 打包通过。 |
+| `npm ci`、`npm run type-check`、`npm run build` | PASS | Vue TypeScript 检查和 Vite 生产构建通过。 |
+| `docker compose config --quiet` 与 `docker compose -f compose.yaml -f compose.dev.yaml config --quiet` | PASS | 基础与开发组合配置均有效。 |
+| 以 fixture/Day 5 环境变量运行 `docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait` | PASS | 受影响镜像构建完成；未覆盖 `.env`，未删除数据库或命名卷。 |
+| `python scripts/smoke-day5.py --restart-agent-service` | PASS | 普通中文需求经 Java SSE 产生候选和 HITL；重启 Python 后 EDIT 由 checkpoint 恢复并重求解；ACCEPT 成功且清理会议。HOT 路径先 PENDING，真实回调 CONFLICT 后 public recovery 视图返回新草案，再次 ACCEPT 成功并完成清理。 |
+| `git diff --check` | PASS | Day 5 改动无空白错误。 |
+
+### 14.5 服务健康、已知边界与下一步
+
+- 最终组合 Compose 中 MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、Java、Python、Frontend/Nginx 和 Video Mock 均为 `healthy`；`rocketmq-store-init` 与 `rocketmq-topic-init` 为预期的 `Exited (0)` 初始化容器。
+- 当前 Compose 的 Smoke 使用确定性 fixture；DeepSeek Provider 仍通过环境变量可替换。未配置 DeepSeek Key 时 Python health 保持 HTTP 200 / `DEGRADED`。
+- 由于固定 `redis:7.4-alpine` 不含 RedisJSON/RediSearch，没有引入不兼容的官方 Redis checkpoint 扩展；自定义 Saver 是实际 LangGraph `BaseCheckpointSaver`，使用 Redis DB 1 字符串键、24 小时 TTL，并有跨 fresh saver 测试。
+- Day 5 没有遗留实现阻塞。**Day 6 唯一明确起点（仅交接，不在本轮执行）：** 在 `frontend/**` 仅经 Java 公共 API 接入聊天 SSE、候选卡片 ACCEPT/EDIT/REJECT、恢复视图和安全 Trace 展示，再补相应浏览器可见验收。
+
+## 15. Day 6 完成交接（当前权威状态）
+
+### 15.1 结论与范围
+
+- **Day 6：PASS。** 已完成聊天 SSE/HITL/安全 Trace、Run 刷新恢复、我的会议手动管理、会议室可用性和管理员管理的浏览器可操作切片；本轮没有开始 Day 7，也没有增加新的产品范围。
+- 浏览器仍只调用 Java `/api/v1/**`。前端没有直连 Python；Java 没有新增 LLM、Prompt、RAG 或 OR-Tools；运行时产品 Agent 仍固定为 Supervisor、Requirement、Policy、Scheduling 四个。
+- Day 4 已提交为 `31773e2 feat: complete day 4 agent foundation`；Day 5 与 Day 6 的已验收改动均保留在未提交工作区。未执行 reset、清理、卷删除、数据库删除或 `.env` 覆盖。
+
+### 15.2 各执行角色完成内容
+
+- **主 Agent / Coordinator：** 在 `docs/05-data-and-api-spec.md` 冻结 Day 6 会议室详情、30 分钟可用性和管理员管理契约（含 `ACTIVE|INACTIVE`、乐观版本和稳定错误码）；新增 `scripts/smoke-day6.py`；亲自审查跨服务边界、完整 Compose、Day 5 回归和真实浏览器流程。浏览器验收发现默认示例引用未在演示库解析的“李四”以及 REJECT 后残留候选卡，已回派并验证修复。
+- **Java subagent（`business-service/**`）：** 新增 `GET /api/v1/rooms/{id}`、安全的 30 分钟 `[start,end)` availability 视图和 ADMIN-only 创建/更新/启停接口；EMPLOYEE 只见 ACTIVE，ADMIN 可见全部；实现 `ROOM_NOT_FOUND`、`ROOM_CODE_CONFLICT`、`ROOM_STATE_CONFLICT`，并增加会议室管理集成测试。
+- **Frontend/Mock subagent（`frontend/**`）：** 实现 fetch SSE 解析、Agent 时间线、候选卡、ACCEPT/EDIT/REJECT、Run URL 恢复、安全 Trace、HOT 状态轮询；实现我的会议手动创建/编辑/取消和会议室可用性/管理员管理；Nginx 禁用 `/api/` 缓冲与缓存并设置 SSE 读取超时。默认 fixture 请求改为仅张三；候选卡只会在真实 `WAITING_CONFIRMATION` 且有草案/令牌时显示。
+- **Python：** Day 6 未修改 `agent-service/**`；Day 5 已验收的 fixture、OR-Tools、HITL、checkpoint 与回调链路作为本轮跨服务回归对象继续通过。
+
+### 15.3 关键文件
+
+- 契约、Smoke 与交接：`docs/05-data-and-api-spec.md`、`scripts/smoke-day6.py`、`docs/HANDOFF.md`。
+- Java：`business-service/src/main/java/com/example/meeting/room/api/AdminRoomController.java`、`RoomController.java`、`RoomItemView.java`、`business-service/src/main/java/com/example/meeting/room/application/RoomAdministrationService.java`、`RoomAvailabilityService.java`、`business-service/src/test/java/com/example/meeting/room/api/RoomManagementIntegrationTest.java`。
+- 前端：`frontend/src/views/ChatView.vue`、`AgentRunView.vue`、`MeetingsView.vue`、`RoomsView.vue`、`frontend/src/components/{AgentTimeline,CandidateCards,HitlDecisionPanel,AppShell}.vue`、`frontend/src/api/{client,types}.ts`、`frontend/nginx/default.conf`。
+
+### 15.4 可复现验证记录
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| 固定 JDK 21 容器中的 `./mvnw -B -ntp verify` | PASS | 主 Agent 复验 48 tests，0 failures/errors/skips；Spotless 与 Jar 打包通过。 |
+| `npm ci`、`npm run type-check`、`npm run build` | PASS | 主 Agent 在最终前端修复后复验；`vue-tsc --noEmit` 与 Vite production build 均通过（49 modules）。 |
+| `docker compose config --quiet` 与 `docker compose -f compose.yaml -f compose.dev.yaml config --quiet` | PASS | 基础和开发组合配置均有效。 |
+| fixture 环境变量下的 `docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait` | PASS | 完整组合重建成功；随后前端修复又以 `up -d --build --wait frontend` 重建并健康。未覆盖 `.env` 或删除命名卷。 |
+| `python scripts/smoke-day6.py` | PASS | Java 公共面真实验证：会议手动创建→修改→取消、Java 代理 SSE 候选→HITL REJECT→安全 Trace、会议室 availability 和管理员 RBAC。 |
+| `python scripts/smoke-day5.py --restart-agent-service` | PASS | Day 5 回归：checkpoint 重启恢复、EDIT/ACCEPT/清理和 HOT CONFLICT recovery 均通过。 |
+| 浏览器验收 `http://localhost` | PASS | 员工默认中文请求经 Java SSE 到达候选与 HITL；安全 Trace 刷新恢复且不显示确认令牌；REJECT 后候选区消失；会议室 30 分钟可用性可查。ADMIN 登录后可见编辑/停用与新增表单；我的会议已实际创建→修改→取消，并在页面重新加载后显示 `CANCELLED`。 |
+| `git diff --check` | PASS | 当前 Day 5/Day 6 未提交改动无空白错误。 |
+
+### 15.5 当前服务状态、未完成项与 Day 7 唯一明确起点
+
+- 最新 `docker compose ps`：MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、business-service、agent-service、frontend 与 video-provider-mock 均为 `healthy`；`rocketmq-store-init` 和 `rocketmq-topic-init` 是预期的 `Exited (0)` 初始化容器。
+- Day 6 没有遗留实现阻塞。前端没有另引入测试框架；严格 TypeScript、生产构建、公共接口 Smoke 和真实浏览器验收共同覆盖本轮变更。
+- **Day 7 唯一明确起点（仅交接，不在本轮执行）：** 按 `docs/08-one-week-development-plan.md` 的 Day 7，在不增加产品功能前提下先建立 Agent 评测集和可复现评测/压测证据，再进行空卷 Docker Smoke、README/架构材料和最终包装。
+
+## 16. Day 7 完成交接（当前权威状态）
+
+### 16.1 结论与范围
+
+- **Day 7：PASS。** 已完成并验收 Java 并发扩充、40 条 Agent 离线评测、OR-Tools 确定性回归、空卷 Docker 三连 Golden Path、真实 HTTP 压测、README/报告/镜像内容清单，以及阻断 HOT 回调恢复的流式线程安全修复。
+- 本轮没有增加产品功能，也没有开始 Day 8。运行时产品 Agent 仍严格固定为 Supervisor、Requirement、Policy、Scheduling 四个；Retriever、Solver、HITL、checkpoint、Tool 和评测节点均为确定性组件。
+- Day 4 基线提交仍为 `31773e2 feat: complete day 4 agent foundation`；Day 5、Day 6、Day 7 的验收改动由本次完成提交记录。没有执行 reset、清理、数据库/命名卷删除或 `.env` 覆盖。
+
+### 16.2 各执行角色完成内容
+
+- **主 Agent / Coordinator（根目录、`docs/**`、`scripts/**`、Compose）：** 修正 `New-LocalEnv.ps1` 的安全占位替换与 `Test-Day7EmptyVolume.ps1` 的可重复空卷验收；扩展 Smoke 的显式 Compose/project 参数与失败诊断；为 Compose 增加保守资源上限；完成 README、部署文档、镜像清单和本交接。亲自执行全栈重建、空卷三连测、Day 5/6 公共 API Smoke、真实 HTTP 并发验证、静态安全扫描和最终 Compose 健康检查。
+- **Java subagent（仅 `business-service/**`）：** 扩充 `MeetingConcurrencyIntegrationTest` 的 CT-03/04/05，并新增连续 HOT 受理后的再入回归；无生产分支改动，证明 Java HOT 标志和确认路径不会因前序 SUCCESS/CONFLICT 改走同步预约。
+- **Python subagent（仅 `agent-service/**`）：** 新增离线 40 条评测集与可执行报告、fixture 兼容回归；为相同 Run 的 resume/callback 引入转换锁；修复 Starlette/AnyIO 与 LangGraph 同步生成器的跨线程续跑竞态，改为专用生产线程加逐帧 Queue SSE，并为 Redis checkpoint 的 load/mutate/save 加锁与同步 durability。新增线程亲和、checkpoint 并发和早到回调重试测试。
+- **Frontend/Mock subagent：** Day 7 未增加产品功能；主 Agent 重新执行了已有 Vue TypeScript 检查和 production build，确认 Day 6 浏览器链路不回归。
+
+### 16.3 关键文件
+
+- 验收与交付材料：`README.md`、`docs/REPORTS.md`、`docs/image-manifest-day7.json`、`docs/06-docker-deployment.md`、`scripts/New-LocalEnv.ps1`、`scripts/Test-Day7EmptyVolume.ps1`、`scripts/smoke-day5.py`。
+- Python：`agent-service/app/evaluation/`、`agent-service/app/api/internal.py`、`agent-service/app/checkpoints/redis.py`、`agent-service/app/run_locks.py`、`agent-service/app/workflow.py`、`agent-service/tests/test_agent_evaluation.py`、`agent-service/tests/test_internal_runs.py`、`agent-service/tests/test_redis_checkpoint.py`、`agent-service/tests/test_run_locks.py`。
+- Java：`business-service/src/test/java/com/example/meeting/booking/MeetingConcurrencyIntegrationTest.java`、`business-service/src/test/java/com/example/meeting/agentgateway/AgentToolGatewayIntegrationTest.java`。
+
+### 16.4 最终可复现验证记录
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| 固定 JDK 21 Maven 容器 `./mvnw -B -ntp verify` | PASS | 53 tests，0 failures/errors/skips；Spotless 与 Jar 通过。 |
+| Python `uv sync --frozen --group dev`、Ruff、mypy、pytest | PASS | 79 packages audited；mypy 37 source files；**57 passed**，仅 1 条上游 LangGraph pending-deprecation warning。 |
+| `uv run python -m app.evaluation` | PASS | 40 fixture cases；Intent/constraint/tool/E2E=1.0；60 个候选独立硬约束检查，0 违例；5/5 引用有效；networkCalls=0。 |
+| `npm ci`、`npm run type-check`、`npm run build` | PASS | 49 modules production build。 |
+| `docker compose -f compose.yaml -f compose.dev.yaml config --quiet` | PASS | 组合配置有效。 |
+| `python scripts/smoke-day5.py --public-trace --restart-agent-service` | PASS | Java SSE、EDIT、checkpoint 重启、ACCEPT、HOT PENDING、MQ CONFLICT callback/replan 全部通过并以正常取消接口清理 Smoke 会议。 |
+| `python scripts/smoke-day6.py` | PASS | 公共会议 CRUD、SSE/HITL/Trace、房间 availability 与管理员 RBAC 全部通过。 |
+| 浏览器 `http://localhost/chat` | PASS | 张三登录后，普通中文需求经 Java SSE 显示 Supervisor/Requirement/Scheduling、Java READ/DRAFT Tool 摘要、3 个候选与 HITL；REJECT 后 Run 为 `CANCELLED`，未调用写入 Tool。 |
+| `powershell -ExecutionPolicy Bypass -File scripts/Test-Day7EmptyVolume.ps1` | PASS | 独立 project `meeting-scheduler-day7-d0a2945b`、全新命名卷、三次 Golden Path（一次 Agent restart）；结束只停止容器/网络，不删除卷。 |
+| `python scripts/concurrency-day2.py --mode room --requests 100 --workers 32` | PASS | 1 success / 99 conflict / 1 unique meeting；P50 500.78 ms、P95 803.27 ms、P99 1288.93 ms。 |
+| `python scripts/concurrency-day2.py --mode idempotency --requests 100 --workers 32` | PASS | 100 success / 0 conflict / 1 unique meeting；P50 507.67 ms、P95 745.70 ms、P99 761.68 ms。 |
+| 静态安全扫描（排除本地 `.env`） | PASS | `secretPrefixMatches=0`，`.env.example` 危险默认敏感值=0。 |
+
+### 16.5 服务状态、已知限制与下一步
+
+- 最终 `docker compose -f compose.yaml -f compose.dev.yaml ps`：MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、business-service、agent-service、frontend、video-provider-mock 均为 `healthy`；两个 RocketMQ 初始化服务为预期的 `Exited (0)`。
+- 最终主栈 Smoke 曾发现一个**旧本地环境**的 `AGENT_CALLBACK_ENABLED` 覆盖值关闭了回调消费者；未读取或修改 `.env`，仅为本次 Compose 进程以 `true` 覆盖，并确认 `.env.example` 的安全默认值已是 `true`。这不是代码、MQ 或 checkpoint 失败。
+- Agent 评测是 fixture/InMemory RAG/确定性求解器基线，不能替代真实 DeepSeek 质量评估；HTTP 压测是单台 Docker 开发机结果，不能视为生产容量或 SLO。
+- Day 7 没有遗留实现阻塞。**下一条允许任务：** 仅在用户明确给出 Day 8 或新的书面范围后再开始；本轮到此停止。
