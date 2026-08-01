@@ -407,3 +407,73 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 - 最终主栈 Smoke 曾发现一个**旧本地环境**的 `AGENT_CALLBACK_ENABLED` 覆盖值关闭了回调消费者；未读取或修改 `.env`，仅为本次 Compose 进程以 `true` 覆盖，并确认 `.env.example` 的安全默认值已是 `true`。这不是代码、MQ 或 checkpoint 失败。
 - Agent 评测是 fixture/InMemory RAG/确定性求解器基线，不能替代真实 DeepSeek 质量评估；HTTP 压测是单台 Docker 开发机结果，不能视为生产容量或 SLO。
 - Day 7 没有遗留实现阻塞。**下一条允许任务：** 仅在用户明确给出 Day 8 或新的书面范围后再开始；本轮到此停止。
+
+## 17. Day 8 前端产品化设计交接（尚未实施）
+
+### 17.1 当前结论
+
+- 用户已明确授权下一阶段优先进行前端与产品设计升级，暂不修改 Java 后端和 Python Agent。
+- 产品工作名为 `MeetOps 企业协作编排助手`，视觉和信息架构以 Cal.diy 的紧凑企业 SaaS 风格为参考，并计划使用 shadcn-vue 作为 Vue 组件基础。
+- 本轮只完成书面设计与执行提示词，**没有修改 `frontend/**`、`business-service/**`、`agent-service/**` 或 `mock-services/**`，不得将本节解释为前端已经实施完成。**
+
+### 17.2 权威文档
+
+- `docs/09-frontend-product-redesign.md`：页面信息架构、视觉 Token、shadcn-vue 接入、真实/Preview 边界、实施阶段和验收标准。
+- `docs/10-frontend-redesign-execution-prompt.md`：可直接复制到新 Codex 对话的完整执行提示词。
+
+### 17.3 已核验基线
+
+- 前端当前仍为 Vue 3.5.18、Vue Router 4.5.1、Vite 7.3.6、TypeScript 5.8.3、npm + `package-lock.json`。
+- 当前尚未安装 Tailwind CSS 或 shadcn-vue，尚未配置 `@/*` 路径别名。
+- 设计前只读基线验证：`npm ci`、`npm run type-check`、`npm run build` 均 PASS，Vite production build 为 49 modules。
+- 工作区在新增本节与两份文档前为 clean；上一次中断没有遗留前端半完成代码。
+
+### 17.4 下一条具体任务
+
+在新的 Codex 对话中完整使用 `docs/10-frontend-redesign-execution-prompt.md`，先执行行为基线，再按“设计系统 → 应用壳 → 智能编排/HITL/Trace → 会议/会议室 → Product Preview → 浏览器验收”的顺序实施。浏览器仍只能访问 Java `/api/v1/**`，任何尚无后端支持的能力都必须明确标记为 Product Preview。
+
+## 18. Day 8 前端产品化升级交接（当前权威状态）
+
+### 18.1 结论与范围
+
+- **Day 8 前端产品化升级：PASS。** `frontend/**` 已从 Day 6 功能演示升级为 `MeetOps 企业协作编排助手`；本轮没有修改 `business-service/**`、`agent-service/**`、`mock-services/**`、Compose 拓扑或跨服务 API/事件语义。
+- 浏览器仍只访问 Java `/api/v1/**`。`src/api/client.ts`、`src/api/types.ts`、auth、POST SSE、Run URL 恢复、HITL 和 HOT 状态轮询语义保持不变；Trace 不展示隐藏推理或确认令牌。
+- 本节覆盖并取代第 17 节“尚未实施”的状态描述；第 17 节仍保留为设计决策来源和实施前基线。
+
+### 18.2 已实现页面与组件
+
+- 应用壳：桌面 240px 侧栏可折叠为 64px，移动端 Sheet 导航，分组信息架构、用户/部门/角色和退出；登录页改为中性 MeetOps 品牌样式。
+- 智能编排：桌面 40/60 双栏、移动端“对话/编排结果”切换、真实 SSE 状态、需求摘要、Top 3 候选成本比较、自定义资源时间轴、政策引用、WAITING_BUSINESS_RESULT、HITL 审阅栏和按需 Trace Drawer。
+- 管理页面：会议桌面紧凑 Table/移动 Card、真实创建/编辑/取消 Dialog/AlertDialog；会议室详情与 ADMIN 编辑 Sheet、启停 AlertDialog、30 分钟 `[start,end)` ResourceTimeline。
+- Run 与待确认：Agent Run 详情使用脱敏 TraceTimeline/Tool Collapsible；待确认页明确说明后端没有跨 Run 列表接口，不伪造任务队列。
+- Product Preview：异常重排使用 `frontend/src/demo/preview.ts` 的静态数据展示事件、受影响会议、Before/After、约束变化、放宽原因和未受影响项；会前会后展示人员、资源、议程、材料、政策、缺失项、决策、行动项、负责人、期限、依赖和任务草案。所有操作只提示“尚未连接后端”，不发送写请求。
+- 业务组件已拆分：`WorkspaceShell`、`PageHeader`、`StatusBadge`、`AgentComposer`、`RequirementSummary`、`CandidateComparison`、`ResourceTimeline`、`RunStatusBar`、`HitlReviewBar`、`TraceDrawer`、`TraceTimeline`、`PlanDiff`、`EmptyState`、`LoadingState`、`ErrorState`、`ProductPreviewBadge`。
+- 覆盖层统一使用 `useModalFocus`：支持 Escape、Tab 焦点循环、打开时初始焦点、关闭后焦点归还和 body 滚动锁；响应式断点覆盖 820px/520px，并遵守 reduced-motion。
+
+### 18.3 技术版本与关键文件
+
+- Tailwind CSS `4.3.3`、`@tailwindcss/vite 4.3.3`、shadcn-vue `2.8.2`、Reka UI `2.10.3`、`@lucide/vue 1.31.0`，均以精确顶层版本写入 `package.json` 并锁入 `package-lock.json`；未生成第二套锁文件。
+- Vite 与 TypeScript 均配置 `@/* -> ./src/*`，现有 `/api` proxy 保留；`components.json` 使用 Neutral、CSS Variables、TypeScript 和 Lucide 配置。
+- 主要文件：`frontend/src/styles.css`、`frontend/src/router/index.ts`、`frontend/src/views/{LoginView,ChatView,MeetingsView,RoomsView,AgentRunView,ApprovalsView,ReplanPreviewView,MeetingLifecyclePreviewView}.vue`、`frontend/src/components/**`、`frontend/src/composables/useModalFocus.ts`、`frontend/src/demo/preview.ts`。
+
+### 18.4 可复现验证证据
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| `npm run type-check` | PASS | `vue-tsc --noEmit` 无错误。 |
+| `npm run build` | PASS | Vite 7.3.6 production build，83 modules，主 CSS 34.14 kB。 |
+| `npm install --include=dev` 后重复 type-check/build | PASS | 当前 Windows Node 24.14.0 环境完整安装开发依赖后可复现。 |
+| `docker compose config --quiet` 与开发组合 config | PASS | 两套 Compose 配置有效。 |
+| 新前端镜像 build + `up -d --force-recreate --wait frontend` | PASS | frontend、business-service、agent-service 与全部常驻依赖最终 healthy；RocketMQ 初始化容器仍为预期 `Exited (0)`。 |
+| `python scripts/smoke-day6.py` | PASS | 会议 CRUD、Java SSE 候选/HITL/Trace、房间 availability 与 ADMIN RBAC 全部通过。 |
+| `python scripts/smoke-day5.py --restart-agent-service` | PASS | 候选 3 个、EDIT 重规划、ACCEPT、checkpoint 重启恢复、HOT CONFLICT 恢复与清理全部通过。 |
+| 浏览器 `1440x900`、`1024x768`、`390x844` | PASS | 登录成功/失败、EMPLOYEE/ADMIN、SSE→候选→WAITING_CONFIRMATION、Trace/Reject/Admin Sheet 的 Escape/焦点/滚动锁、Preview 和无横向溢出已实测。 |
+| 静态扫描与 `git diff --check` | PASS | 无 Day 6 文案、`window.confirm`、前端直连 Python/内部 API、乱码或第二套锁文件；仅有 Windows LF→CRLF 提示。 |
+
+### 18.5 已知环境差异、未连接能力与下一步
+
+- 当前全局 npm 行为曾使一次普通 `npm ci` 只安装 463 个生产/CLI 依赖并缺少 `vue-tsc`；显式 `npm install --include=dev` 后 type-check/build PASS。随后再次执行 `npm ci --include=dev` 时遇到 Windows `node_modules/@swc/helpers` 文件锁 `EPERM`。这是本机依赖目录文件占用，不是源码或 lock 解析失败；在干净终端/关闭占用进程后应重跑标准 `npm ci` 作为环境复核。
+- shadcn-vue CLI 的传递依赖 `validate-npm-package-name@8.0.0` 对本机 Node 24.14.0 给出 engine warning（要求 24.15.0 或受支持的 22.x/26.x），但实际安装、type-check、Vite build 和 Docker build 均成功。建议本地 Node 升到受支持的小版本后复跑 `npm ci`。
+- 本地未提交 `.env` 覆盖会关闭 `AGENT_CALLBACK_ENABLED`；不读取或改写 `.env`，仅用进程级 `AGENT_CALLBACK_ENABLED=true` 重建 business-service 后，Day 5 HOT recovery PASS。仓库 `.env.example` 的安全默认值仍为 `true`。
+- “异常重排”和“会前会后”明确是 Product Preview；后端没有对应写接口。待确认页也没有跨 Run 列表 API。这些页面不得解释为已连接真实后端。
+- 下一步建议：在 Node 22.22.2+ 或 24.15.0+ 的干净环境复跑普通 `npm ci`，并补可长期执行的前端组件/浏览器自动化测试；不要为 Preview 发明后端接口。
