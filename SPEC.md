@@ -2,7 +2,7 @@
 
 ## 1. 基线
 
-- Spec版本：1.0。
+- Spec版本：1.1。
 - 项目类型：简历展示型个人完整项目。
 - 开发周期：全职一周，使用Codex辅助开发。
 - 项目语言：Java、Python、TypeScript。
@@ -28,6 +28,13 @@
 13. 用户偏好只保存明确表达的内容，不自动学习隐式偏好。
 14. 外部工具只保留Mock视频会议链接；不做邮箱和空调。
 15. 不做故障注入、完整OpenTelemetry平台、多租户、SSO和复杂审批。
+16. Agent 主链路升级为受控 `Plan -> Act -> Observe -> Verify -> Replan` 循环，不引入 DeepAgents，不增加运行时 Agent 数量；循环只覆盖理解、只读 Tool、验证、求解和冲突重规划，写操作仍由 HITL 后的确定性节点执行。
+17. DeepSeek 使用 OpenAI-compatible 原生 `tools/tool_calls`；模型 Tool 参数必须经 Pydantic Schema、业务上下文约束、权限/风险策略和重复调用指纹校验后才能执行。
+18. Requirement Agent 内部采用 Evaluator-Optimizer：先生成结构化需求，再由确定性语义评估器检查时间基准、字段完整性和跨字段一致性，最多携带结构化反馈修复一次；Evaluator 不是新的产品 Agent。
+19. Scheduling Agent 对 Java 并发冲突生成结构化修复反馈，保留原硬约束、排除失败候选并最多重规划2次；超过预算必须进入可解释终态或重新请求用户决策，不允许无限循环。
+20. 自然语言字段必须保留来源忠实度：人数只决定容量，不得自动扩写为姓名；显式姓名、时间、时长、设施与 intent 必须经确定性 Source Fidelity Evaluator 核对，缺失标题和会议类型使用稳定默认值，不要求无意义澄清。
+21. Agent 的 CREATE、RESCHEDULE、CANCEL 使用可辨别草案结构和各自的确认 Tool；改期保留未编辑字段并显示 Before/After，取消显示目标会议。任何 EDIT 都必须作废旧 token、重新读取事实并生成新 token，三类草案在 ACCEPT 前均不得改变正式会议。
+22. 真实模型质量门禁独立于 fixture：组件评测与 Compose 完整轨迹分别报告 provider/model、Prompt/Schema 版本、重复次数、终态、失败分类、延迟与 API Token；未配置 Key 或未实际执行必须标记 SKIPPED/FAIL，不能用 fixture PASS 替代。
 
 ## 3. P0交付
 
@@ -42,6 +49,7 @@
 - Mock视频会议工具。
 - Docker Compose一键部署。
 - Agent评测和Java压测报告。
+- 原生 Tool Calling 轨迹评测、有界 Loop 停止条件评测、Evaluator 修复评测和并发冲突重规划评测。
 
 ## 4. 文档优先级
 

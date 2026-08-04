@@ -1,363 +1,352 @@
-# 前端产品化重设计规范
+# MeetOps 前端产品化重设计规范（Refero 方案）
 
-## 1. 文档状态
+## 1. 文档状态与执行边界
 
-- 状态：已设计，尚未实施。
-- 目标阶段：Day 8 / 前端产品化升级。
-- 参考产品：[Cal.diy](https://github.com/calcom/cal.diy)。
-- 组件基础：[shadcn-vue](https://github.com/unovue/shadcn-vue)。
+- 状态：设计已定版，等待实现。
+- 设计定版日期：2026-08-13（Asia/Shanghai）。
 - 修改范围：`frontend/**`；实现完成后由主 Agent 更新 `docs/HANDOFF.md`。
 - 本阶段不修改 Java、Python、Mock 服务、Compose 拓扑或跨服务 API 契约。
+- 本文替代本文件此前以 Cal.diy 和固定 40/60 双栏为主的方案；Cal.com 仅可作为信息密度参考，不再是主视觉模板。
 
-本规范不能覆盖 `SPEC.md` 的冻结决策。现有登录、Java 公共 API、SSE、HITL、Run 恢复、会议管理、会议室管理和安全 Trace 均属于真实能力，视觉升级不得改变其语义。尚无后端支持的未来能力只能作为明确标注的 Product Preview 展示，不能伪造成已经执行成功的业务功能。
+本文不能覆盖 `SPEC.md` 的冻结决策。登录、Java 公共 API、SSE、候选方案、HITL、Run/checkpoint 恢复、会议 CRUD、会议室管理和安全 Trace 都是真实能力，视觉升级不得改变其语义。没有公共 API 支持的能力必须保持为清楚标记的 Product Preview，不得伪造成功。
 
-## 2. 产品定位
+## 2. 当前问题与重构目标
 
-产品工作名：`MeetOps 企业协作编排助手`。
+当前前端已经完成 Tailwind CSS、shadcn-vue 基础设施、产品壳、结构化候选、HITL、Trace 和响应式基础，但仍有明显的“功能测试台”观感：
 
-前端需要同时做到：
+- 智能编排使用固定 40/60 双栏，将聊天和结构化调试数据永久并排，主任务不够聚焦。
+- 页面普遍使用“大标题 + 说明文字 + 白色边框卡片”，所有内容权重接近，缺少成熟 AI 应用的工作流层级。
+- 会议室默认是两列静态资源卡片，用户不能一眼回答“哪个房间在什么时间可用”。
+- 待确认页仍是空状态说明，没有形成审批工作台体验；但后端又确实没有跨 Run 待确认列表接口。
+- Trace 组件已具备真实数据，却仍偏开发调试输出，没有形成普通用户与技术用户的渐进式信息披露。
+- 导航没有成为 AI 会话入口和会话历史载体，智能编排仍像传统后台中的一个普通页面。
 
-1. 让普通用户以成熟企业 SaaS 的方式完成会议调度和管理。
-2. 让面试或技术演示能够看见 Multi-Agent、Tool、HITL、并发裁决和恢复链路。
-3. 为后续“复杂会议编排、异常重排、会前准备与会后行动”预留产品界面，但不提前伪造后端能力。
+重构目标是把它升级为：
 
-## 3. 设计原则
+> 以 AI 会话为主入口、以会议资源时间轴为业务工作台、以显式确认保证安全、以可展开 Trace 证明技术链路的企业会议智能调度产品。
 
-### 3.1 借鉴 Cal.diy 的内容
+## 3. 已选 Refero 参考界面
 
-- 紧凑、克制、低装饰的企业 SaaS 信息密度。
-- 可折叠侧边导航、顶部页面标题、面包屑和用户菜单。
-- 以细边框、留白和文字层级组织内容，而不是大面积色块。
-- 列表、日历、详情抽屉和设置式分区。
-- 清晰的 loading、empty、error、disabled 和危险操作确认。
+Refero 页面用于研究真实产品的布局、信息层级和交互模式，不授权复制品牌、图片、Logo、字体文件或源代码。最终界面必须使用 MeetOps 自有文字、业务数据和组件。
 
-### 3.2 不直接复制的内容
+### 3.1 Meta AI：应用壳与智能编排主界面
 
-- Cal.com 的商标、Logo、品牌文案、插画和 React 组件代码。
-- 与当前产品无关的公开预约链接、支付、App Store、团队轮询等信息架构。
-- 大量无真实数据支撑的 KPI、图表和企业功能入口。
+- Refero：[Meta AI — AI Assistant](https://refero.design/pages/0d258b4a-2867-4746-ab86-03518bc2a36b)
+- 采用：窄左栏、宽对话画布、底部悬浮输入框、按需出现的右侧 Side Sheet、低干扰的消息排版。
+- 不采用：Meta Logo、品牌渐变、媒体/Vibes 等无关入口。
 
-### 3.3 Agent 界面原则
+### 3.2 Mangomint：会议与资源时间轴
 
-- 业务结果优先，Agent Trace 次级展示。
-- 不展示隐藏推理、完整 Prompt、Token、JWT、Service Token 或敏感正文。
-- 只展示 Agent 名称、结构化步骤、工具摘要、引用、耗时、风险等级和业务结果。
-- 所有写操作都必须保留 ACCEPT / EDIT / REJECT HITL。
-- Product Preview 页面和真实页面必须在视觉与文案上明确区分。
+- Refero：[Mangomint — Calendar](https://refero.design/pages/92ae5496-0aaf-4700-9a9c-fe03f9baf24a)
+- 采用：日期导航、日/周切换、资源列 × 时间行、彩色占用块、点击空槽位后出现的右侧编辑器。
+- 不采用：美容行业文案、销售模块、预约收款逻辑。
 
-## 4. 信息架构
+### 3.3 TravelPerk：待确认与审批工作台
 
-侧边栏按以下分组：
+- Refero：[TravelPerk — Approval Processes](https://refero.design/pages/9335a133-d103-4685-8152-eb2a0f7e5fc1)
+- 采用：标题旁计数、搜索与筛选、紧凑审批卡、明确审核人/类型/状态、直接操作。
+- 不采用：差旅政策、费用和多级审批模型。本项目仍只有 HITL ACCEPT/EDIT/REJECT。
+
+### 3.4 n8n：Run 详情与 Trace
+
+- Refero：[n8n — Activity / Timeline](https://refero.design/pages/1974172f-cafa-4873-96f9-8c50321e8d72)
+- 采用：运行摘要、状态筛选、Activity Feed、Timeline/History、节点详情抽屉、成功/运行/等待/失败状态。
+- 不采用：自由拖拽工作流画布。运行时 Agent 数量和 LangGraph 拓扑不得被前端虚构或修改。
+
+### 3.5 Copy.ai：工作流模板仅作次级参考
+
+- Refero：[Copy.ai — Workflow Templates](https://refero.design/pages/37159acc-20ab-47d2-9ae8-a09ca8a627bd)
+- 仅采用：智能编排空状态中的少量任务模板/快捷示例。
+- 不采用：营销落地页、大字号 Hero、模板商城或虚构工作流能力。
+
+## 4. 统一设计语言
+
+四套参考只提供布局模式，最终必须通过一套 MeetOps Design Token 统一：
+
+| 语义 | 值 |
+|---|---|
+| 页面背景 | `#F7F7F5` |
+| 内容背景 | `#FFFFFF` |
+| 主文字 | `#18181B` |
+| 次级文字 | `#71717A` |
+| 边框 | `#E4E4E7` |
+| 主色 | `#4F46E5` |
+| 主色浅背景 | `#EEF2FF` |
+| 成功 | `#16A34A` |
+| 等待/警告 | `#D97706` |
+| 错误/冲突 | `#DC2626` |
+| 信息 | `#2563EB` |
+| 卡片圆角 | `12px` |
+| 输入框圆角 | `16px` |
+
+- 字体：`Inter, PingFang SC, Microsoft YaHei, system-ui, sans-serif`。
+- 页面标题 22–24px；正文 14px；辅助信息 12px。
+- 间距只使用 4、8、12、16、24、32。
+- 普通内容靠边框、分隔线和留白组织，只有悬浮输入框、Dialog、Sheet 使用明显阴影。
+- 图标统一使用现有 `@lucide/vue`，禁止继续以 `✦ ✓ ▦ ⌂ ↻ ◫ ☰ ×` 等文本字符代替产品图标。
+- 禁止大面积渐变、玻璃拟态、霓虹发光、无业务意义插画和装饰动画。
+- 保持亮色主题为本阶段完整交付；暗色主题不是完成条件。
+
+状态统一通过 `StatusBadge`：
+
+- `SUCCESS / SUCCEEDED / CONFIRMED / COMPLETED / ACTIVE`：success。
+- `WAITING_* / PENDING / PROCESSING`：warning。
+- `RUNNING`：info，并提供不依赖动画的文字状态。
+- `FAILED / CONFLICT / CANCELLED / INACTIVE`：destructive 或 neutral，按业务语义区分。
+- 普通元数据：secondary。
+
+## 5. 总体信息架构
+
+桌面端采用三层结构，但同一时刻只让主任务占据中心：
 
 ```text
+┌──────────────┬──────────────────────────────────┬──────────────────────┐
+│ 左侧导航/会话 │ 主工作区                           │ 按需右侧 Sheet         │
+│ 220–240px    │ 对话 / 时间轴 / 审批 / Trace       │ 需求、详情、HITL、节点 │
+└──────────────┴──────────────────────────────────┴──────────────────────┘
+```
+
+侧栏顺序：
+
+```text
+MeetOps
+  新建编排
+  搜索会话
+  最近任务（当前标签页可恢复的 thread/run）
+
 工作台
   智能编排
   待我确认
 
 协作
   我的会议
-  会议室资源
+  会议室
 
 系统
-  Agent 运行详情（从具体 Run 进入）
+  运行记录（没有列表 API 时不创建伪数据；从具体 Run 进入）
 
 产品预览
   异常重排
   会前会后
 
 底部
-  当前用户、部门、角色、退出
+  用户、部门、角色、退出
 ```
 
-路由要求：
+约束：
 
-- 保留 `/login`、`/chat`、`/meetings`、`/rooms` 和 `/agent/runs/:runId`。
-- 允许增加 `/approvals`、`/preview/replan`、`/preview/meeting-lifecycle`。
-- `/` 继续进入真实的智能编排页面。
-- 不存在 Agent Run 列表接口时，不创建伪造的“全部运行”页面。
+- 现有 `/login`、`/chat`、`/meetings`、`/rooms`、`/approvals`、`/agent/runs/:runId` 和 Preview 路由保持兼容。
+- 路由切换不能丢失运行中的 Run、当前 thread 或本标签页历史。
+- “最近任务”只能来自现有安全的本地会话上下文和真实 Run，不得生成伪记录。
+- 1024px 以下侧栏改为 Sheet；移动端主区为单栏。
 
-## 5. 视觉系统
+## 6. 页面规格
 
-### 5.1 基础 Token
+### 6.1 登录页
 
-推荐亮色主题：
+- 保持当前真实登录、失败、加载、redirect 和权限行为。
+- 使用中性背景、紧凑居中表单和 MeetOps 文字标识。
+- 不展示开发阶段文案、真实密码提示或与产品无关的营销内容。
+- 390×844 下表单不溢出，键盘聚焦时主要按钮仍可操作。
 
-| 语义 | 推荐值 |
-|---|---|
-| 页面背景 | `#f8f9fa` |
-| 卡片/浮层背景 | `#ffffff` |
-| 主文字 | `#111827` |
-| 次级文字 | `#6b7280` |
-| 边框/Input | `#e5e7eb` |
-| 主按钮 | `#292929` |
-| Hover/Accent | `#f3f4f6` |
-| 基础圆角 | `0.5rem` |
+### 6.2 智能编排：Meta AI 主模式
 
-- 字体：Inter、`Microsoft YaHei`、system-ui。
-- 页面标题：20–24px；正文：14px；辅助信息：12px。
-- 间距尺度：4、8、12、16、24、32。
-- 普通卡片以边框为主，不使用厚阴影；Sheet、Dialog、Dropdown 才使用明显阴影。
-- 禁止大面积渐变、玻璃拟态、霓虹发光和装饰性动画。
-- 第一阶段只完整实现亮色主题；可以保留 dark token，但不以深色切换为交付条件。
+这是默认首页，也是最高优先级 Golden Path。
 
-### 5.2 状态映射
+#### 主画布
 
-所有页面通过统一 `StatusBadge` 映射：
+- 删除固定 `40% conversation + 60% result` 的永久双栏。
+- 中央对话列建议最大宽度 840–920px，较宽屏幕保持舒适阅读宽度。
+- 历史消息使用轻量消息块，不给每条 Agent 回复套大卡片。
+- 用户消息可以右对齐并使用浅主色背景；Agent 回答使用正文式布局。
+- 当前 Run 状态以标题栏中的小型状态、进度条或 step chips 呈现，不显示大段调试说明。
+- 页面底部使用悬浮 `AgentComposer`：16px 圆角、自动增长、发送键、字数/快捷键提示；运行中明确禁用重复提交。
 
-- `SUCCESS`、`CONFIRMED`、`COMPLETED`：success。
-- `WAITING_*`、`PENDING`、`PROCESSING`：warning。
-- `FAILED`、`CONFLICT`、`CANCELLED`：destructive。
-- `RUNNING`：info。
-- 普通元数据：secondary。
+#### 空状态
 
-页面不得各自编写状态颜色和中文标签。
+- 使用一句价值明确的欢迎语和 4–6 个真实可执行的快捷任务。
+- 快捷任务覆盖创建、多人协调、会议室推荐、政策查询、改期和取消。
+- Copy.ai 模板仅作为紧凑快捷卡参考，不做模板商城。
 
-### 5.3 应用尺寸
+#### 结构化结果
 
-- 桌面侧边栏约 240px，可折叠为 64px。
-- 顶部栏约 56px。
-- 主内容最大宽度约 1440px。
-- 1024px 以下允许压缩双栏比例。
-- 移动端侧边栏使用 Sheet，页面改为单栏且无水平滚动。
+- 需求解析、候选方案、政策依据和 Agent 执行过程全部进入右侧 `OrchestrationSheet`。
+- Sheet 默认关闭；收到候选或进入 `WAITING_CONFIRMATION` 时可以自动打开一次，但用户关闭后不得反复强制打开。
+- Sheet 内分 Tabs：`需求`、`候选`、`政策`、`执行`。
+- 候选最多三项，显示时间、房间、楼宇、容量/设备、totalCost 和可理解的 costBreakdown；推荐项必须来自真实排序。
+- 引用只展示真实 `citation`；没有引用则显示“未找到可验证证据”，不得让模型自由补出处。
 
-## 6. shadcn-vue 接入方案
+#### HITL
 
-当前前端是 Vue 3.5 + Vite 7 + TypeScript + npm，尚未使用 Tailwind。接入必须遵循 [shadcn-vue Vite 安装说明](https://www.shadcn-vue.com/docs/installation/vite) 和 [主题说明](https://www.shadcn-vue.com/docs/theming)。
+- `WAITING_CONFIRMATION` 时，在右侧 Sheet 内显示完整草案，同时在输入框上方显示紧凑待确认提示。
+- CREATE：会议草案摘要。
+- RESCHEDULE：明确 Before/After。
+- CANCEL：明确目标会议，不提供无意义的时间编辑。
+- 操作保持 `接受并执行 / 编辑后重新规划 / 拒绝`。
+- EDIT 必须继续调用现有 resume 契约；不能直接写正式会议。
+- 倒计时来自真实 `expiresAt`，过期后按钮禁用并提示重新生成。
 
-### 6.1 基础设施
+#### 会话和运行恢复
 
-- 继续使用 npm 和 `package-lock.json`，禁止生成 pnpm/yarn/bun 锁文件。
-- 安装 Tailwind CSS v4、`@tailwindcss/vite` 和必要的 Node 类型。
-- 在 TypeScript 和 Vite 中同时配置 `@/* -> ./src/*`。
-- 保留当前 Vite proxy。
-- 使用 CSS Variables 和 neutral 基色。
-- CLI 执行前核验当前稳定版本，并锁定明确版本；不要把 `@latest` 写入长期脚本。
-- 推荐选择：Reka、Nova、Neutral、Lucide、Inter、TypeScript、`@/components/ui`。
+- 必须保留现有 `X-Run-Id` 响应头捕获、稳定 client thread、sessionStorage 会话历史、per-run context、路由 runId 恢复、RUNNING 轮询和 recovery epoch。
+- 从“我的会议/会议室/待确认”返回智能编排时，不能像新会话一样清空。
+- “新建编排”才显式创建新 thread 并清除当前 run query。
 
-### 6.2 分批组件
+### 6.3 我的会议：Mangomint 日历 + 列表
 
-第一批：
+- 默认提供 `日历 / 列表` 切换；移动端默认列表。
+- 顶部工具条：今天、前后日期、日期标题、日/周切换、状态筛选、创建会议。
+- 日历使用时间行 × 日期/资源列以及彩色会议块；只根据已经加载的真实数据绘制。
+- 当前 API 不足以支撑跨大范围数据时，不得伪造完整月历；明确限制当前窗口。
+- 点击会议块打开右侧详情 Sheet；编辑继续使用真实更新 API，取消使用确认 Dialog。
+- 来源 `MANUAL / AGENT`、会议状态、房间和参会者保持清楚。
+- 列表视图参考成熟 SaaS 的紧凑密度，不继续堆大卡片。
+
+### 6.4 会议室：资源时间轴优先
+
+- 默认视图从“两列静态房间卡片”改为 `资源时间轴`。
+- 顶部筛选：楼宇、楼层、容量、设备、房型、日期、时间窗口、仅看可用。
+- 第一列固定显示房间名称/容量/设备摘要；右侧按 30 分钟 `[start,end)` 槽位横向展示。
+- 空闲槽位使用浅色可点击区域；占用块展示允许公开的会议摘要；维护/停用房不可预约。
+- 点击房间名打开详情 Sheet；点击空闲槽位打开创建会议 Sheet，并预填房间和时间。
+- 提供 `时间轴 / 房间目录` 切换；现有房间卡片可保留在目录视图，但降低视觉体积。
+- ADMIN 的新建、编辑、启停操作与 EMPLOYEE 只读状态严格区分。
+- 不引入楼层地图，除非后端/演示资产有真实布局数据。
+
+### 6.5 待我确认：TravelPerk 审批模式
+
+当前后端没有跨 Run 待确认列表 API，设计必须诚实：
+
+- 如果当前标签页有可恢复的真实 `WAITING_CONFIRMATION` Run，显示为审批卡。
+- 否则显示紧凑空状态，并引导回“智能编排”；不显示伪造数量或假任务。
+- 顶部保留标题、真实计数，以及在有数据时启用的类型/状态筛选。
+- CREATE/RESCHEDULE/CANCEL 分别显示不同摘要，操作和智能编排内 HITL 共用组件与逻辑。
+- 不新增多级审批、审核人配置或审批流程创建功能。
+
+### 6.6 Agent Run 与 Trace：n8n Activity 模式
+
+普通用户先看：
 
 ```text
-button badge card input textarea field select separator
-alert skeleton sonner tooltip
+✓ 理解会议需求
+✓ 查询参会者时间
+✓ 检索会议制度
+● 正在求解候选方案
+○ 等待用户确认
+○ 执行业务写入
 ```
 
-第二批：
+技术详情页：
 
-```text
-sidebar avatar dropdown-menu breadcrumb scroll-area sheet
-```
+- 顶部显示状态、intent、模型、Prompt/Schema 版本、总耗时、model/tool 调用、Token、runId 和 traceId。
+- 中间是按时间排列的 Agent Step、Loop Event 和 Tool Call Activity Feed。
+- 点击一项在右侧 Sheet 查看安全输入摘要、输出摘要、riskLevel、错误码、耗时和幂等键摘要。
+- 提供 `全部 / Agent / Tool / Loop / 错误` 过滤。
+- 不显示隐藏推理、完整 Prompt、confirmationToken、JWT、Service Token 或完整敏感正文。
+- TraceDrawer 与完整 Run 页面复用相同 presenter/组件，不维护两套状态翻译。
 
-第三批：
+### 6.7 Product Preview
 
-```text
-collapsible tabs table dialog alert-dialog checkbox switch
-```
+- 异常重排和会前会后继续保留 Preview 标识。
+- Preview 数据必须放在 `frontend/src/demo/**` 或等价明确目录。
+- 操作只能提示“尚未连接后端，未执行写操作”，不得模拟成功落库。
+- Preview 不得占据主导航最显眼位置。
 
-首阶段不引入：
+## 7. 组件与代码组织
 
-- Data Table / TanStack Table。
-- Chart。
-- Resizable。
-- Form + Zod/VeeValidate 全量迁移。
-- 用普通 Calendar 代替会议室 30 分钟资源时间轴。
-
-### 6.3 迁移风险
-
-- Tailwind Preflight 会改变基础元素表现。
-- 当前 `styles.css` 中全局 `button/input/select/textarea` 规则会覆盖生成组件，必须逐步收口。
-- shadcn-vue 是把组件源码复制进项目；升级时必须检查 diff，不允许无审查 overwrite。
-- Sheet/Dialog/Dropdown 的 Teleport、焦点捕获、滚动锁定和 z-index 必须在真实页面验证。
-- 中文宽度、按钮换行、表格列宽和移动端溢出必须使用中文 fixture 验证。
-
-## 7. 页面规格
-
-### 7.1 登录页
-
-- 中性背景和居中卡片，参考 Cal.com 登录页的克制布局。
-- 使用 MeetOps 文字标识，不复制 Cal.com Logo。
-- 可以使用极淡的世界时区/网格背景，但不得抢夺注意力。
-- 保留现有登录、错误、加载、禁用和重定向行为。
-- 删除当前蓝绿色渐变和开发阶段文案。
-
-### 7.2 智能编排
-
-这是首要 Golden Path 和最终演示首页。
-
-桌面结构：左侧约 40% 为会话，右侧约 60% 为结构化结果。
-
-左侧包括：
-
-- 会话标题和“新建会话”。
-- 用户消息、Agent 业务回复和澄清问题。
-- 自然语言输入、快捷示例、字符限制和流式状态。
-- 简洁 `RunStatusBar`，展示状态并提供 Trace 入口。
-
-右侧 Tabs：
-
-1. 需求解析。
-2. 候选计划。
-3. 资源日历。
-4. 政策依据。
-
-需求解析展示：意图、会议类型、时间窗口、必需/可选参与者、设备、硬/软约束和缺失信息。若当前 SSE 未提供完整结构化字段，只展示有真实数据支撑的内容，不从自然语言伪造确定结论。
-
-候选计划使用 `CandidateComparison`：
-
-- 推荐项、选择状态。
-- 时间、房间和建筑。
-- 总成本和 costBreakdown。
-- 对扣分项给出用户可理解的解释。
-- 候选最多 3 个，严格使用现有 SSE 数据。
-
-Agent Trace 不永久占据主屏。点击“查看运行过程”打开右侧 Sheet，内部使用 `TraceTimeline` 展示 Step 与 Tool。
-
-`WAITING_CONFIRMATION` 时底部展示固定 `HitlReviewBar`：
-
-- 草案摘要和过期时间。
-- 接受并执行。
-- 编辑后重新规划。
-- 拒绝。
-
-EDIT 使用 Dialog/Sheet；REJECT 使用 AlertDialog。不得改变现有 resume 接口。
-
-移动端用 Tabs 切换“对话”和“编排结果”；固定操作栏不得遮挡正文。
-
-### 7.3 我的会议
-
-- 桌面优先使用紧凑 Table，移动端使用 Card。
-- 保留当前状态筛选和 CRUD。
-- 允许基于已加载数据提供“列表/日程”视图，不得发明后端查询能力。
-- 创建和编辑使用 Dialog 或 Sheet。
-- 取消使用 AlertDialog。
-- 清楚区分 `MANUAL` 与 `AGENT` 来源。
-
-### 7.4 会议室资源
-
-- 桌面使用紧凑列表或两列卡片。
-- 展示名称、编号、楼宇、楼层、容量、设备、热门标记和状态。
-- 详情与 ADMIN 编辑使用 Sheet。
-- 员工只读与管理员操作必须清晰区分。
-- 可用性使用自定义 `AvailabilityGrid` / `ResourceTimeline` 表示固定 30 分钟 `[start,end)` 槽位，不使用普通月历冒充资源时间轴。
-
-### 7.5 Agent Run 详情
-
-顶部展示：状态、intent、duration、model/tool call 数量、runId、traceId 和返回入口。
-
-主体使用垂直时间线：
-
-- Supervisor、Requirement、Policy、Scheduling 和 deterministic 节点。
-- Tool Call 使用 Collapsible。
-- 显示 riskLevel、duration、status、sanitizedArgs 和 resultSummary。
-- 不显示隐藏推理或确认令牌。
-
-### 7.6 待我确认
-
-当前后端没有跨 Run 的待确认列表接口：
-
-- 只能展示当前已知/恢复的 Run 待确认项，或者显示清晰的 Product Preview 空状态。
-- 不得在页面中伪造来自后端的任务队列。
-- 不得发明 API。
-
-### 7.7 异常重排 Product Preview
-
-静态预览数据放入 `frontend/src/demo/**` 或同等明确目录。
-
-页面展示：
-
-- 房间停用或参与者临时不可用事件。
-- 受影响会议与资源。
-- 原计划、新计划和 Before/After Diff。
-- 约束变化、放宽原因和未受影响项。
-- “产品预览”Badge。
-
-执行按钮只能提示“尚未连接后端”，不得伪造保存成功。
-
-### 7.8 会前会后 Product Preview
-
-两个 Tabs：
-
-- 会前准备：人员、房间/设备、议程、材料、政策检查和缺失项。
-- 会后行动：决策、行动项、负责人、截止时间、依赖和待确认任务草案。
-
-同样必须明确标记为 Preview，不发送真实写请求。
-
-## 8. 组件与代码组织
-
-至少拆分以下业务组件：
+保留并重构现有组件，目标结构至少包括：
 
 ```text
 WorkspaceShell
-PageHeader
-StatusBadge
+ConversationSidebar
+ConversationCanvas
 AgentComposer
+OrchestrationSheet
 RequirementSummary
 CandidateComparison
+PolicyCitations
+HitlReviewPanel
+MeetingCalendar
 ResourceTimeline
-RunStatusBar
-HitlReviewBar
-TraceDrawer
-TraceTimeline
-PlanDiff
-EmptyState
-LoadingState
-ErrorState
-ProductPreviewBadge
+RoomDirectory
+ApprovalCard
+RunOverview
+ActivityTimeline
+TraceDetailSheet
+StatusBadge
+PageHeader
+EmptyState / LoadingState / ErrorState
 ```
 
-- 不再把新逻辑堆入 `ChatView.vue` 或一个巨型 `styles.css`。
-- `api/client.ts`、`api/types.ts`、auth、SSE 解析和现有业务逻辑优先保持原状。
-- 统一中文文案、标点和状态翻译，修复全部乱码。
-- 删除 `Day 6` 等开发阶段标签。
+- 不把新逻辑继续堆进 `ChatView.vue` 和单个巨型 `styles.css`。
+- 将 Token、壳层、聊天、管理页、Trace 和响应式样式拆分到可维护文件，或优先使用现有 shadcn-vue primitives + Tailwind utilities。
+- 优先保留 `src/api/client.ts`、`src/api/types.ts`、`src/api/agent-view.ts`、auth、SSE 解析和恢复逻辑。
+- 禁止为了换 UI 重写协议解析或删除兼容字段。
+- 所有 icon-only button 必须有 `aria-label` 和可见 focus ring。
 
-## 9. 分阶段实施
+## 8. 分阶段实施
 
-### 阶段 0：行为基线
+### 阶段 0：真实基线
 
-- 记录登录、聊天 SSE、候选、HITL、恢复、Trace、会议 CRUD、房间查询/管理的截图和命令结果。
-- 执行 `npm ci`、`npm run type-check`、`npm run build`。
+- 记录当前登录、聊天历史、运行中切页恢复、政策问答、候选、HITL、Trace、会议 CRUD 和房间 ADMIN 的行为。
+- 运行 `npm ci`、`npm run type-check`、`npm run build`。
 
-### 阶段 1：设计系统
+### 阶段 1：Design Token 与 WorkspaceShell
 
-- 接入 Tailwind v4、shadcn-vue、路径别名和主题 token。
-- 用基础组件建立统一状态与反馈语言。
-- 不立即删除旧 CSS。
+- 更新为本文颜色、字体、圆角和状态语言。
+- 用 Lucide 替换文本图标。
+- 把侧栏升级为“新建编排 + 最近任务 + 产品导航”，保留响应式 Sheet。
 
-### 阶段 2：应用框架
+### 阶段 2：智能编排 Golden Path
 
-- 重建 WorkspaceShell、Sidebar、Topbar、用户菜单和登录页。
-- 收口会覆盖 shadcn 的全局旧样式。
+- 移除固定 40/60 布局。
+- 实现 ConversationCanvas、悬浮 AgentComposer 和 OrchestrationSheet。
+- 将需求、候选、政策、执行和 HITL 迁入 Sheet。
+- 回归会话历史、Run URL、切页和刷新恢复。
 
-### 阶段 3：Golden Path
+### 阶段 3：会议和会议室
 
-- 重构智能编排、CandidateComparison、HitlReviewBar、TraceDrawer 和 Agent Run 详情。
-- 保留所有 SSE、HITL、恢复和异常处理行为。
+- 实现会议日历/列表切换。
+- 实现资源时间轴/房间目录切换。
+- 将创建、详情、编辑放入 Sheet/Dialog，保护权限和 CRUD。
 
-### 阶段 4：管理页
+### 阶段 4：待确认与 Trace
 
-- 重构会议和会议室页面。
-- 增加桌面/移动布局、Sheet/Dialog 和自定义时间槽视图。
+- 使用真实当前 Run 构建审批卡或诚实空状态。
+- 建立普通进度和技术 Activity 两层视图。
 
-### 阶段 5：产品预览
+### 阶段 5：响应式、无障碍与清理
 
-- 实现异常重排和会前会后预览。
-- 所有预览状态、数据和按钮均明确标记。
+- 覆盖 1440×900、1024×768、390×844。
+- 检查键盘、焦点、Esc、滚动锁定、触屏目标、中文换行和横向溢出。
+- 清理无引用 CSS、文本图标、开发阶段标签和乱码。
 
-### 阶段 6：清理和验收
+## 9. 验收标准
 
-- 删除无引用旧 CSS 和开发阶段文案。
-- 修复乱码和响应式问题。
-- 更新测试和交接文档。
+### 9.1 功能红线
 
-## 10. 验收标准
+- 浏览器仍只访问 Java `/api/v1/**`。
+- SSE、HITL、异步结果和 Run 恢复没有回归。
+- 切换左侧页面再返回，当前会话和运行状态仍在。
+- ACCEPT 前无正式会议副作用；EDIT 仍重新校验；REJECT 不写入。
+- 会议和房间 ADMIN/EMPLOYEE 权限不变。
+- Product Preview 不伪造写入。
+- 不展示隐藏推理和敏感凭据。
 
-### 10.1 自动验证
+### 9.2 视觉完成条件
 
-至少执行：
+- 智能编排不再呈现固定双栏测试台。
+- 会议室默认能回答“某时间哪些房间可用”。
+- 我的会议具备可扫描的日历/列表结构。
+- 待确认使用审批卡或真实空状态，而不是说明文档式页面。
+- Trace 具备普通进度和技术详情两层信息。
+- 页面主操作在 3 秒内可定位；同一页面只保留一个主要 CTA。
+- 1440、1024 和 390 宽度无横向滚动和遮挡。
+
+### 9.3 自动验证
 
 ```powershell
-Push-Location frontend
+Push-Location D:\agent\frontend
 npm ci
 npm run type-check
 npm run build
@@ -365,43 +354,23 @@ Pop-Location
 
 docker compose config --quiet
 docker compose -f compose.yaml -f compose.dev.yaml config --quiet
-python scripts/smoke-day6.py
 ```
 
-若变更涉及聊天、HITL 或恢复，再执行：
+若变更影响聊天、HITL、恢复、会议或会议室交互，还要执行仓库当前可用的对应 Smoke，并以 `scripts/` 实际文件为准核对命令，不得凭旧文档编造脚本。
 
-```powershell
-python scripts/smoke-day5.py --restart-agent-service
-```
+### 9.4 浏览器验收矩阵
 
-### 10.2 浏览器验收
+- 视口：1440×900、1024×768、390×844。
+- 身份：EMPLOYEE、ADMIN。
+- 状态：loading、empty、error、disabled、SSE streaming、RUNNING、WAITING_CONFIRMATION、WAITING_BUSINESS_RESULT、SUCCESS、CONFLICT、FAILED。
+- 流程：新建会话、连续两轮问答、运行中切页返回、刷新恢复、候选、ACCEPT/EDIT/REJECT、Trace、会议 CRUD、房间可用性和 ADMIN 管理。
+- 交互：Tab、Shift+Tab、Enter、Esc、焦点返回、Sheet/Dialog 滚动锁定、触屏按钮尺寸。
 
-视口：
+## 10. 明确不做
 
-- 1440×900。
-- 1024×768。
-- 390×844。
-
-状态：
-
-- EMPLOYEE / ADMIN。
-- 登录成功和失败。
-- Loading / Empty / Error / Disabled。
-- SSE streaming。
-- WAITING_CONFIRMATION。
-- ACCEPT / EDIT / REJECT。
-- WAITING_BUSINESS_RESULT。
-- 页面刷新后的 Run 恢复。
-- Trace Sheet、Dialog、Sheet、Dropdown 的 Tab/Esc/焦点行为。
-- 无横向溢出。
-- 图标按钮均有 `aria-label`。
-
-### 10.3 完成定义
-
-- 真实业务行为没有回归。
-- 浏览器仍只访问 Java `/api/v1/**`。
-- Product Preview 没有伪造真实后端能力。
-- Cal.diy 风格在应用壳、密度、边框、表格、抽屉和状态反馈上保持一致。
-- shadcn-vue 组件经过主题化和业务组合，不是默认组件堆砌。
-- `docs/HANDOFF.md` 记录版本、文件、验证证据、预览能力和未完成项。
+- 不复制 Refero 截图、品牌资产或第三方源码。
+- 不为了“像 AI”增加虚假思考过程或隐藏推理。
+- 不增加真实邮件、真实日历/视频供应商、IoT、SSO、多租户、多级审批或自动移动他人会议。
+- 不虚构跨 Run 待确认列表、楼层平面图、利用率 KPI 或运行记录列表。
+- 不改变 Agent 数量、后端写入语义、30 分钟槽位和时区规则。
 

@@ -1,13 +1,51 @@
 # 项目开发交接
 
+## 2026-08-13 Refero 前端产品化设计定版与执行交接
+
+- 已将 `docs/09-frontend-product-redesign.md` 更新为唯一权威的 Refero 前端重构规范，替代此前以 Cal.diy 和固定 40/60 双栏为主的旧方案。设计组合已经冻结：Meta AI 用于应用壳与智能编排，Mangomint 用于会议/资源时间轴，TravelPerk 用于 HITL 待确认，n8n 用于 Run Activity/Trace，Copy.ai 仅用于空状态快捷任务。
+- 已明确当前真实起点：前端已经安装 Tailwind CSS v4、shadcn-vue 2.8.2、Reka UI、Lucide，并已有 WorkspaceShell、候选、HITL、Trace、会议/房间页面与恢复逻辑；后续实现不得重复初始化依赖或把现有项目当脚手架重建。
+- 核心产品决策：智能编排移除固定 40/60 测试台双栏，改为宽对话画布 + 底部悬浮输入框 + 按需 Orchestration Sheet；会议室默认改为房间行 × 30 分钟时间列的资源时间轴；待确认只展示当前标签页真实可恢复 Run，不伪造跨 Run 队列；Trace 分普通进度和技术 Activity 两层。
+- 视觉 Token 冻结为 `#F7F7F5` 页面背景、`#FFFFFF` 表面、`#18181B` 主文字、`#71717A` 次文字、`#E4E4E7` 边框和 `#4F46E5` 主色；图标统一使用现有 `@lucide/vue`，不继续使用文本符号图标。
+- `docs/10-frontend-redesign-execution-prompt.md` 已更新为可以完整复制到另一对话的实施提示词，包含目录边界、现有真实能力、分阶段修改、功能红线、构建/Compose/浏览器验收和 HANDOFF 要求。
+- 本次仅更新设计与执行文档，没有修改前端运行代码，因此没有把构建结果冒充为本次实施验收；下一任务是按 `docs/10` 在 `frontend/**` 实施并验证。
+
+## 2026-08-13 左侧导航会话恢复与演示数据扩容
+
+- 根因与修复：Vue 路由切换会卸载 `ChatView`，原实现只在组件内存中保留当前 `runId/threadId`；左侧导航回到不带查询参数的 `/chat` 后无法知道要恢复哪个 Run。现在 `frontend/src/router/index.ts` 会在离开聊天页前保存安全格式的当前 Run，并在返回 `/chat` 时先补回 `?runId=...`；`ChatView.vue` 同步保存当前 Run 与按 thread 分组的问答历史。“新建会话”仍会显式清空该指针。
+- 浏览器实测：从 `run_476dc3b6e2494ddb863e69e0e792abc2` 聊天页切到“待我确认”，再点击“智能编排”，地址恢复为原 `?runId=...`，原问题与“必需参会者在请求窗口内没有共同空闲时间。”回答均仍可见。
+- 新增 Flyway `V6__expand_demo_people_and_rooms.sql`，受 `demo-data-enabled` 控制且不清理已有卷：运行库现有 17 名人员、8 个部门、2 名 ADMIN、15 名 EMPLOYEE，其中 1 名停用员工；会议室共 13 间，覆盖 8 种类型、4 栋楼、容量 1–80 人、白板/大屏/视频/投影组合、5 间热门房与 1 间维护停用房。员工页面只返回 12 间 ACTIVE 房，管理员可查看停用房。
+- 人员身份边界：冻结权限契约仍只有 `EMPLOYEE/ADMIN`；产品、销售、财务、人力、客户成功、法务、研发、运维等差异通过部门与展示身份表达，没有静默扩展 RBAC 角色。
+- 验证：Java 21 容器 `./mvnw -B -ntp verify` PASS（61 tests，0 failure/error/skip，Spotless PASS）；`npm run type-check` PASS；`npm run build` PASS（88 modules）；business/frontend Compose 镜像重建并健康；真实 MySQL 从 V5 增量升级到 V6，统计与上述数量一致；会议室页面实显 12 间可用房。
+
+## 2026-08-13 运行中切页恢复竞态修复
+
+- 根因：新 Run 的 `runId` 由 Java 创建并已在 SSE 响应头 `X-Run-Id` 提供，但前端此前只等待第一条 `run.started` 帧；首次 thread 也由服务端稍后创建。用户在两者落盘前切到“我的会议”会卸载 ChatView，URL 和会话存储均没有可恢复标识。
+- 修复：`apiSseRequest` 在验证 SSE 响应后立即上报响应头 Run；ChatView 在发起请求前生成稳定 thread，并同步保存 Run/thread/问题；返回运行中的 Run 后轮询 recovery/trace，短暂 404/503 在元数据可见前有限重试；恢复请求增加 epoch 隔离，旧请求不得覆盖新会话或新 Run；“新建会话”显式移除旧 runId 查询参数。
+- 既有任务恢复：用户报告时最近的 `run_b6a8fde55c8c4857b529d6907d00a1c6` 已在后端确认 `SUCCEEDED`，Run/Trace 未丢失，并已导航恢复。旧版只持久化问题摘要，因此该旧 Run 的完整问题正文不能从服务端反向还原。
+- 验证：`npm run type-check` PASS；`npm run build` PASS（88 modules）；frontend Compose 镜像重建并 healthy；浏览器确认响应头阶段即出现新 `?runId=`，快速离开后后端 Run 仍执行到 `SUCCEEDED`。
+
+## 2026-08-13 会话历史展示修复
+
+- 修复 `frontend/src/views/ChatView.vue` 只渲染当前 `submittedMessage/answerSummary`、新 Run 清空上一轮问答的问题；同一 `threadId` 的问答现在按轮次追加展示，每轮保留对应 Run 详情入口。
+- 会话记录按 `threadId` 保存到当前浏览器标签页的 `sessionStorage`，刷新当前 Run 后仍可恢复；点击“新建会话”会清空当前展示并生成新的 thread，不跨浏览器或跨设备同步。
+- 验证：`npm run type-check` PASS；`npm run build` PASS（88 modules）；frontend Compose 镜像重建并达到 healthy；真实浏览器连续提交两条只读政策问题后旧问题、旧答案和新问题同时可见，刷新后仍同时可见。
+- 与会话展示修复不同，后续“改期/取消”仍必须能解析目标会议。`TARGET_REFERENCE_MISSING` 表示请求没有会议 ID，也没有“刚才创建的会议/最近的会议”等可解析指代；该终态不会修改会议或发送通知。
+
+## 2026-08-13 Requirement 来源忠实度误判修复
+
+- 修复显式中文会议类型（例如“架构评审”）被模型规范化为 `ARCHITECTURE_REVIEW` 后，`SourceFidelityEvaluator` 因规范值不是原文连续子串而错误返回 `EVIDENCE_NOT_IN_SOURCE` 的问题。
+- `meetingType` 现在只接受受控枚举到中文原文锚点的确定性映射；未知会议类型仍会拒绝，未放宽姓名、时间、设备或人数的来源忠实度边界。
+- 新增与浏览器原始请求同形的回归测试；`tests/test_provider_and_tools.py` 34 passed，ruff PASS，mypy 39 source files PASS。
+- Agent Compose 镜像重建并 healthy；真实 `deepseek-v4-flash` 浏览器复测不再出现 `EVIDENCE_NOT_IN_SOURCE`，请求安全结束为 `NO_SOLUTION`（张三和李四在该固定窗口没有共同空闲时间），没有创建草案或会议。
+
 ## 1. 交接元信息
 
-- 最后更新时间：2026-08-11（Asia/Shanghai）。
-- 当前里程碑：Day 7——测试、Docker 空卷验收、评测、压测与项目包装，**PASS**。
+- 最后更新时间：2026-08-12（Asia/Shanghai）。
+- 当前里程碑：Spec 1.1——受控 Agent Loop、原生 DeepSeek Tool Calling、冲突修复和 Evaluator–Optimizer 升级，**代码、全量回归与 fixture 全栈 Smoke PASS**。
 - Day 1 至 Day 7 已验收回归：**PASS**。
-- Spec 基线：1.0；没有修改冻结架构决策或扩大 P0 范围。
+- Spec 基线：1.1；保留四个运行时 Agent 和既有服务边界，不引入 DeepAgents 或 Critic Agent。
 - Git 状态：`main` 包含 Day 4 基线提交 `31773e2 feat: complete day 4 agent foundation`；Day 5、Day 6 与 Day 7 的已验收改动由本次完成提交记录，未作重置或清理。
-- 运行状态：完整 Day 7 开发 Compose 正在运行；所有常驻服务 healthy，一次性 RocketMQ 初始化服务均为预期的 `Exited (0)`。
+- 运行状态：business-service 与 agent-service 已使用 Spec 1.1 新镜像重建；当前本机 Agent 已切换为 `AGENT_MODEL_PROVIDER=deepseek`、`DEEPSEEK_MODEL=deepseek-v4-flash`，完整基础 Compose 常驻服务 healthy。真实模型业务验收结论见第 20 节。
 - 维护责任：本文件只由主 Agent / Coordinator 更新。
 
 本文件记录真实可复现状态，不替代 `SPEC.md` 和专项规范。
@@ -390,7 +428,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 |---|---|---|
 | 固定 JDK 21 Maven 容器 `./mvnw -B -ntp verify` | PASS | 53 tests，0 failures/errors/skips；Spotless 与 Jar 通过。 |
 | Python `uv sync --frozen --group dev`、Ruff、mypy、pytest | PASS | 79 packages audited；mypy 37 source files；**57 passed**，仅 1 条上游 LangGraph pending-deprecation warning。 |
-| `uv run python -m app.evaluation` | PASS | 40 fixture cases；Intent/constraint/tool/E2E=1.0；60 个候选独立硬约束检查，0 违例；5/5 引用有效；networkCalls=0。 |
+| `uv run python -m app.evaluation` | PASS | 40 component-fixture cases；Intent/constraint/tool/component task success=1.0；60 个候选独立硬约束检查，0 违例；5/5 引用有效；networkCalls=0。 |
 | `npm ci`、`npm run type-check`、`npm run build` | PASS | 49 modules production build。 |
 | `docker compose -f compose.yaml -f compose.dev.yaml config --quiet` | PASS | 组合配置有效。 |
 | `python scripts/smoke-day5.py --public-trace --restart-agent-service` | PASS | Java SSE、EDIT、checkpoint 重启、ACCEPT、HOT PENDING、MQ CONFLICT callback/replan 全部通过并以正常取消接口清理 Smoke 会议。 |
@@ -477,3 +515,154 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 - 本地未提交 `.env` 覆盖会关闭 `AGENT_CALLBACK_ENABLED`；不读取或改写 `.env`，仅用进程级 `AGENT_CALLBACK_ENABLED=true` 重建 business-service 后，Day 5 HOT recovery PASS。仓库 `.env.example` 的安全默认值仍为 `true`。
 - “异常重排”和“会前会后”明确是 Product Preview；后端没有对应写接口。待确认页也没有跨 Run 列表 API。这些页面不得解释为已连接真实后端。
 - 下一步建议：在 Node 22.22.2+ 或 24.15.0+ 的干净环境复跑普通 `npm ci`，并补可长期执行的前端组件/浏览器自动化测试；不要为 Preview 发明后端接口。
+
+## 19. Spec 1.1 受控 Agent 升级交接（当前权威状态）
+
+### 19.1 结论与架构边界
+
+- **本轮四项升级已落盘：** Scheduling 使用有预算的 `Plan -> Act -> Observe -> Verify -> Replan`；DeepSeek Provider 使用原生 `tools/tool_calls/tool`；同步 409 与异步 HOT 冲突进入统一的候选排除和事实刷新路径；Requirement 使用确定性 Evaluator–Optimizer，最多语义修复一次。
+- 运行时 Agent 仍严格固定为 Supervisor、Requirement、Policy、Scheduling。Evaluator、Tool Gate、Verifier、OR-Tools、HITL 和 Conflict Repair Handler 都是确定性组件；没有引入 DeepAgents、第五个 Agent 或 Critic Agent。
+- Java 仍是业务事实源，MySQL 仍是并发最终裁决；模型只获得 READ Tool Schema。草案由求解和独立验证后确定性创建，确认 Tool 只在 HITL ACCEPT 后调用。
+- 全 Run 上限为 12 次模型调用、16 次 Tool 调用、20 个图节点和 2 次业务冲突重规划；Scheduling 单轮最多 4 次模型迭代，达到上限映射为稳定 `BUDGET_EXHAUSTED`。
+
+### 19.2 关键实现
+
+- `agent-service/app/agent_loop.py`：READ Tool Schema、Pydantic 参数校验、canonical context、稳定指纹/`toolCallId`、结果大小限制、Requirement Evaluator 和停止原因。
+- `agent-service/app/providers/{base,deepseek,fixture}.py`：Provider-neutral Tool 消息协议、DeepSeek 原生多轮 Tool Calling、非思考模式、HTTP/响应边界和可复现 fixture 轨迹。
+- `agent-service/app/workflow.py`：模型调用精确计数、受控 Scheduling Loop、独立求解/验证、SSE `agent.loop`、同步冲突重规划、HITL 再确认与稳定终态。
+- `agent-service/app/api/internal.py`：服务端 `requestTime`、HOT 冲突反馈、checkpoint 恢复、重复回调幂等和重规划上限。
+- READ Tool 的稳定业务 ID 包含 `run + tool + factEpoch + argumentsHash`：同一 epoch 重试幂等，EDIT 或冲突修复的事实刷新不会复用旧 Java 审计结果，也不会碰撞 Python Trace 主键。该问题由真实 Day 5 Smoke 发现后修复，测试 Fake 已改为保留生产 ID。
+- `business-service/.../BookingConflictEvidence.java`：同步确认的服务端冲突证据；`BookingConfirmationService` 同时覆盖 Redis 预占冲突和数据库最终冲突；HOT `BOOKING_RESULT` 复用同一冲突类型常量。
+- `.env.example`、`compose.yaml`、`SPEC.md`、`docs/04` 至 `docs/07`、`docs/11-controlled-agent-loop-design.md` 和 README 已同步模型名、预算、契约、评测分层和安全边界。
+
+### 19.3 可复现验证证据
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| `uv run ruff check .` | PASS | Python 静态检查无错误。 |
+| `uv run mypy app` | PASS | 38 个 source files 无类型错误。 |
+| `uv run pytest -q` | PASS | **68 tests**，仅 1 条上游 LangGraph pending-deprecation warning；包含 Python Tool Trace 同语义重放幂等/异义拒绝回归。 |
+| `uv run python -m app.evaluation` | PASS | `component-fixture-evaluation-v2`，40 cases，component task success=1.0，60 个候选硬约束 0 违例，5/5 引用有效，networkCalls=0。 |
+| Java 21 定向 `-Dtest=AgentToolGatewayIntegrationTest test` | PASS | 10 tests；同步 409 证据、异步冲突载荷和重复消息终态幂等均通过。 |
+| Java 21 完整 `mvn verify` | PASS | **54 tests**，0 failure/error/skip；Spotless、编译、测试和 Jar 打包均通过。 |
+| 基础与开发组合 `docker compose ... config --quiet` | PASS | 两套 Compose 配置均可解析，新增模型/Tool/图预算环境变量已接线。 |
+| 新 business/agent 镜像构建 | PASS | Java 镜像构建内再次执行 54 tests + Spotless；Python 镜像包含 Spec 1.1 Loop，实现后两服务重建为 healthy。 |
+| `python scripts/smoke-day5.py --public-trace --restart-agent-service ...` | PASS | 初始 3 候选、`agent.loop` PLAN/VERIFY、EDIT 事实刷新与再 HITL、checkpoint 重启、ACCEPT、会议清理、HOT MQ CONFLICT callback/replan 全部通过。 |
+
+### 19.4 安全、限制与下一步
+
+- Spec 1.1 实现阶段没有使用用户在对话中提供的 DeepSeek Key。后续第 20 节在线核验只复用宿主环境中既有且不会回显的 Key；任何已暴露在聊天记录中的 Key 都应在 DeepSeek 控制台撤销并重新生成。
+- 当前 `python -m app.evaluation` 是组件 fixture 评测，不是完整 Graph E2E，更不是实时模型质量。真实 DeepSeek 仍需用轮换后的 Key 单独执行并记录 provider/model、重复次数、延迟、Token、费用和失败轨迹。
+- 本节记录的是切换前的 fixture 验收状态；当前真实模型状态与下一步以第 20 节为准。
+
+## 20. DeepSeek V4 Flash 真实模型核验（当前本机状态）
+
+### 20.1 切换与协议结论
+
+- 2026-08-12 已将本机未提交 `.env` 的 `AGENT_MODEL_PROVIDER` 切换为 `deepseek`，并将旧模型名改为 `deepseek-v4-flash`；密钥只来自既有宿主环境变量，没有写入仓库、`.env`、命令输出、日志、fixture 或 Trace。
+- 当前 `agent-service` 运行时回读为 `provider=deepseek`、`model=deepseek-v4-flash`、`deepseekConfigured=true`，基础 Compose 全部常驻服务 healthy。
+- 官方文档确认该调用名当前指向 DeepSeek-V4-Flash-0731。真实 API 协议探针返回一个原生 `resolve_employees` `tool_call`，参数为合法 JSON，并包含 `prompt_tokens`、`completion_tokens`、缓存命中/未命中和总 Token 字段；因此 OpenAI-compatible Tool Calling 适配本身可用。
+
+### 20.2 真实模型发现的问题
+
+- 首次真实中文预约中，Supervisor 合理返回 `SCHEDULING`，但图路由只处理 `REQUIREMENT/POLICY`，导致请求被直接当作 FINAL、零 Tool 完成。已在 Supervisor 控制边界把不允许直接进入的初始路由归一为 `REQUIREMENT`，并新增 `SCHEDULING -> REQUIREMENT` 回归测试。
+- 修复路由后，真实 Requirement 对自然语言仍不稳定：曾把“2人、15:00-16:00”幻觉成“张三、李四、2小时”；显式写出张三和李四时也多次返回 `requiredParticipants` 缺失。Prompt 已补充 intent、姓名逐字复制、人数仅作为容量和显式时间忠实规则，但重复在线请求仍未稳定通过 Requirement。
+- “VIP会议室有哪些使用规则”被 Supervisor 路由到 Requirement/Clarification，而不是 Policy，最终要求补预约字段且没有引用。说明真实模型前置路由必须增加确定性语义校验或降级策略，不能只依赖结构合法性。
+- 这些请求通常在约 1-5 秒内返回，但没有一条自然语言预约真实跑到 Java Tool、OR-Tools 候选和 HITL；因此当前只能宣称 V4 Flash 已接通和原生 Tool Calling 协议已验证，不能宣称真实模型 Golden Path 已通过。
+- SSE/Trace 终态数据在数据库内为正确 UTF-8；PowerShell/Python 控制台曾显示韩文样式乱码是宿主输出解码现象，不是 Java -> Python 请求体损坏。Java 代理已有 UTF-8 请求体和中文透传集成测试。
+
+### 20.3 本轮代码与验证
+
+- `agent-service/app/workflow.py`：增加 Supervisor 初始路由控制边界，并强化 Requirement 的源事实约束 Prompt。
+- `agent-service/tests/test_provider_and_tools.py`：新增真实模型暴露问题的确定性路由回归。
+- 定向验证：ruff PASS、mypy 38 source files PASS、29 tests PASS；真实模型协议探针 PASS。完整 Python 回归为 **68 tests PASS**，仅 1 条上游 LangGraph pending-deprecation warning。
+
+### 20.4 下一步优先级
+
+1. 为 Supervisor 增加独立的业务路由 Evaluator（至少覆盖 policy/create/modify/cancel），非法或低置信度路由进入一次受控修复，而不是直接相信模型枚举值。
+2. 为 Requirement Evaluator 增加“源文本忠实度”规则：显式姓名集合、人数/容量、时间区间/时长、设施别名和 intent 必须能追溯到原始文本；不一致时一次修复，仍失败则澄清。
+3. 新增 live-model evaluation runner，使用版本化语料重复运行并记录 route/constraint/tool/terminal 成功率、P50/P95、Token 和费用；fixture 评测只保留为确定性回归。
+4. 真实模型达到门槛后，再补同步冲突与 HOT 冲突的在线轨迹；当前不要用 fixture 的 100% 指标代表 V4 Flash 质量。
+
+## 21. 真实模型修复任务设计交接（尚未实施）
+
+- 已新增 `docs/12-live-model-agent-repair-plan.md`：冻结人数/姓名语义、安全默认、三层验证、路由/Requirement/Tool Loop、改期取消 HITL、Trace/Token 和真实模型评测门禁。
+- 已新增 `docs/13-live-model-agent-repair-execution-prompt.md`：可完整复制到新 Codex 对话，要求直接实施代码、测试、真实模型评测、Compose 联调和交接，并包含反伪完成规则。
+- 本节只代表修复设计和执行提示词已经完成；除第 20 节已记录的 Supervisor 控制边界/Prompt 修正外，Source Fidelity Evaluator、RequirementDraft、完整 MODIFY/CANCEL、Loop 持久化、Token 接线、前端 Loop 展示和 live-model runner **尚未实施**。
+- 下一条具体任务：在新对话完整使用 `docs/13-live-model-agent-repair-execution-prompt.md`，按 Slice A → B → C → D → E 实施；不得跳过真实自然语言门禁或用 fixture 指标替代。
+
+## 22. 真实模型修复实施交接（当前权威状态）
+
+### 22.1 结论与范围
+
+- 第 21 节设计已实施，当前状态以本节覆盖：Source Fidelity、受控 Route/Requirement 修复、原生 READ Tool Loop、CREATE/RESCHEDULE/CANCEL 三类 HITL、运行指标持久化、前端 Loop/Trace 展示、真实模型 component/trajectory runner 均已落盘。
+- 运行时仍严格是 Supervisor + Requirement/Policy/Scheduling；Evaluator、Normalizer、Tool Gate、Retriever、Solver 与 HITL Handler 都是确定性组件。浏览器仍只访问 Java，Python 未跨库读取 Java 业务表。
+- Java 对三类同 Run/operation 新草案会原子作废旧 PENDING token；取消预览绑定 meeting version。最近会议 Tool 只返回 `CONFIRMED`，避免已取消记录污染 MODIFY/CANCEL。
+- `hitl.required` 已统一为 `actionType=CREATE|RESCHEDULE|CANCEL` 可辨别草案；`agent.loop` 与 Trace 已持久化 phase/iteration/decision/feedback/预算/stopReason，Run 持久化 provider/model/prompt/schema/token/耗时。
+
+### 22.2 最终验证证据
+
+| 层级/命令 | 结果 | 证据 |
+|---|---|---|
+| Java 21 `./mvnw -B -o -ntp verify` | PASS | 61 tests，0 failure/error/skip；Jar 与 Spotless PASS。最终 business 镜像构建内再次执行同一 61 tests 并 PASS。首次在线 build 曾因 Maven Central 下载中断失败，重试后成功，不计作测试失败。 |
+| Python `ruff` / `mypy app` / `pytest` | PASS | Ruff PASS；mypy 39 source files；76 passed，仅 1 条上游 LangGraph pending-deprecation warning。 |
+| Frontend `npm ci` / `type-check` / `build` | PASS | 463 packages；仅 Node 24.14.0 对一个传递依赖的 engine warning；Vue type-check PASS，Vite build 88 modules PASS。 |
+| 基础/开发 Compose config、镜像 build、`up --wait` | PASS | 两套 config PASS；Java/Python/Frontend 镜像均完成构建；MySQL、Redis、RocketMQ、Qdrant、Java、Python、Frontend、Video Mock 全部 healthy，初始化容器 Exited (0)。未删除命名卷。 |
+| `component-fixture` 40 条 | PASS（组件门禁） | `networkCalls=0`；Intent/Tool/Citation=100%，Constraint F1=96.76%，硬约束 60 candidates/0 violation；`componentTaskSuccess=82.5%`，不是 E2E。 |
+| `live-model-component` core 12 × 3 | PASS | DeepSeek `deepseek-v4-flash`：36 samples；Route 100%，Intent 97.22%，Constraint F1 100%，Tool 94.44%，Source violation 0，Native Tool 100%，Citation 100%；P50 3.53s/P95 6.89s。 |
+| `live-model-component` full 40 × 1 | **FAIL** | Route/Intent 100%，Constraint F1 89.05%，Native Tool 100%；但 Tool 80% < 90%、Source violation 1 > 0、Citation 80% < 100%。因此整体 live-model component 严格结论为 FAIL，不能用 core PASS 覆盖。 |
+| `live-model-trajectory` 公共 Java API | PASS | 8 条隔离轨迹 7 PASS，成功率 87.5% >= 80%；P50 9.16s/P95 11.60s。覆盖 CREATE、Policy、MODIFY/CANCEL preview、REJECT/ACCEPT 与 HITL 前快照。唯一失败为固定 ID 9001 在保留数据中不存在，系统准确返回 `MEETING_NOT_FOUND`；动态 ID CANCEL 成功轨迹已验证。 |
+| `git diff --check` | PASS | 仅 Windows LF→CRLF 提示，无 whitespace error。 |
+
+脱敏报告：`artifacts/fixture-evaluation.json`、`artifacts/live-eval/component-core.json`、`artifacts/live-eval/component-full.json`、`artifacts/live-eval/trajectory-final.json`。报告不包含访问令牌、确认令牌、Key 或隐藏推理。
+
+### 22.3 已知失败、环境和下一步
+
+- `live-model-component` 全量 40 尚未达门禁，集中在旧语料中缺少可执行时间窗的 RECOMMEND/FIND、空列表被模型写入 `missingFields`、一次多人协调 evidence 不忠实，以及 Policy 模型未稳定选中问题期望的唯一 chunk。此项必须保持 FAIL；下一任务应修语料版本与 Production Requirement/Policy 选择边界后重新执行完整 40 条，不能只重跑成功样本。
+- core component 与 Compose 轨迹已 PASS，说明当前 Golden Path 可演示；不应把它解释为 full 40 的全面质量通过。
+- 当前本机 Compose 使用进程级 `AGENT_MODEL_PROVIDER=deepseek`、`DEEPSEEK_MODEL=deepseek-v4-flash`，所有常驻服务 healthy。Key 只由未提交环境注入，整个过程未回显或落盘；对话中曾暴露的任何旧 Key 仍应在供应商控制台轮换。
+- 下一条具体任务：只处理 full 40 component 的失败分类并重跑 `core 12×3 + full 40×1`；在 full 40 达标前不得将整体 live-model component 标记 PASS。
+
+## 23. 会议制度知识库源文档（当前状态）
+
+### 23.1 已完成
+
+- 已新增 `deploy/rag-documents/`，包含 MeetOps 科技有限公司会议制度知识库的 22 份 UTF-8 Markdown 源文档，文件名按知识库清单固定为 `01-...md` 至 `22-...md`。
+- 每份文档均包含 Front Matter：`documentId`、`title`、`documentType`、`department`、`version`、`effectiveDate`、`status`、`priority`、`timezone`；生效日期统一为 `2026-08-01`，时区统一为 `Asia/Shanghai`。
+- 每份文档均包含“适用范围”“规则正文”“例外与冲突处理”“常见问题”“RAG 测试问题”章节；每份附 6 至 7 个自然语言 RAG 测试问题，不附答案。
+- 文档内容已统一冻结并反复校验：30 分钟槽位、`[start,end)`、专项规则优先于通用规则、Agent 创建/改期/取消必须人工确认、EDIT 后重新校验、系统不得自动移动他人会议、未找到依据时返回“未找到可验证证据”，以及真实邮件/视频供应商/IoT/SSO/多级审批边界。
+
+### 23.2 可复现验证证据
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| `Get-ChildItem deploy\\rag-documents -Filter *.md` | PASS | 22 个文件，文件名与用户清单一致。 |
+| Front Matter、必备章节和 `documentType` 枚举检查 | PASS | 22/22 通过；类型仅使用规范允许的 7 个枚举。 |
+| 汉字数检查 | PASS | 22/22 约 1,500–1,700 个汉字，满足 1,500–3,000 字目标范围。 |
+| RAG 测试问题检查 | PASS | 22/22 每份 6 或 7 个问题，均位于独立 `RAG 测试问题` 章节。 |
+| `git diff --check -- deploy/rag-documents` | PASS | 无空白错误。 |
+
+### 23.3 RAG ingestion 已实现
+
+- 已实现受控 Markdown/文本型 PDF 导入器：UTF-8/LF 规范化、严格 Front Matter 校验、PDF 同名 YAML sidecar、ATX 标题路径切片、PDF 页码保留、稳定 `chunkId`、SHA-256 checksum 去重、失败状态和重复执行幂等。扫描型 PDF 明确失败，当前不支持 OCR。
+- `rag_document` 使用 `INDEXING -> INDEXED|FAILED` 状态；新增 checksum 唯一约束。相同 checksum 已索引时跳过；同一 `documentId` 内容变更时先 upsert 新切片，再删除该文档不再存在的旧切片。源文件删除不会自动删除已索引文档。
+- Qdrant payload 已包含 `chunkId/documentId/documentType/title/headingPath/page/content/version/priority/checksum`。检索使用确定性向量召回加标题、章节和正文关键词重排，不引入外部 embedding、Rerank 服务或额外 Agent；Citation 仍只允许来自本次检索候选。
+- Compose 新增一次性 `rag-init`：先执行 Alembic，再从只读挂载的 `/app/rag-documents` 导入；`agent-service` 仅在 `rag-init` 成功后启动。仍未新增公共上传接口、真实邮件/视频供应商、OCR、SSO 或多级审批。
+- 主要实现位于 `agent-service/app/rag/ingestion.py`、`agent-service/app/rag/ingest.py`、`agent-service/alembic/versions/0003_enforce_rag_document_checksum_uniqueness.py`、`scripts/smoke-rag-ingestion.py` 和 `compose.yaml`；契约已同步到 `docs/04-agent-spec.md`、`docs/05-data-and-api-spec.md`、`docs/06-docker-deployment.md`、`docs/07-test-and-evaluation.md`。
+
+### 23.4 可复现实施证据
+
+| 命令/检查 | 结果 | 证据 |
+|---|---|---|
+| `uv sync --frozen --group dev`、Ruff、Mypy、Pytest | PASS | Qdrant 客户端锁定为与服务端同系列的 `1.12.2`；Ruff PASS，Mypy 41 source files，**90 passed**；仅 1 条上游 LangGraph pending-deprecation warning。 |
+| `docker compose build rag-init` | PASS | 正式镜像构建成功，包含 `pypdf==6.14.2` 和 `qdrant-client==1.12.2`；Dockerfile 将 uv HTTP 超时设为 120 秒以覆盖 OR-Tools 大包下载。 |
+| 首次正式数据导入 | PASS | Alembic `0003_rag_checksum_unique` 已应用；22 份文档全部 `INDEXED`，共 307 个切片写入 Qdrant。 |
+| 正式镜像 `docker compose run --rm --no-deps rag-init` | PASS | 对同一批源文档复跑：`indexedCount=0`、`skippedCount=22`、`chunkCount=307`，确认 checksum 去重和幂等。 |
+| `scripts/smoke-rag-ingestion.py` | PASS | MySQL 为 22 个 `INDEXED` 文档/307 切片；Qdrant 为 22 个文档/307 个制度切片；VIP 会议室和架构评审问句均在 Top 1 命中对应专项文档。 |
+| 基础与开发 Compose `config --quiet` | PASS | `compose.yaml` 与 `compose.yaml + compose.dev.yaml` 均有效。 |
+
+### 23.5 边界与下一步
+
+- 当前导入入口是部署期 CLI/一次性容器，不提供用户在线上传、删除或管理 API；PDF 只处理可提取文本并要求 Front Matter 或同名 `.yaml/.yml`，不做 OCR。
+- 4 条内置种子仍保留为 fixture 和向后兼容语料；22 份正式制度文档已登记并索引。不得再将当前状态描述为“仅内置种子”。
+- 本切片没有遗留实现阻塞。后续若扩展管理能力，应先设计受控的重建/删除命令和权限边界，不能因源目录文件消失而静默删除 Qdrant 与 `rag_document` 数据。
