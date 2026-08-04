@@ -7,6 +7,28 @@
 - 验证：固定 Java 21 Maven 容器离线 `verify` PASS（61 tests，0 failure/error/skip，Spotless PASS）；Python Ruff PASS、Mypy 41 source files PASS、Pytest 90 passed（1 条上游 pending-deprecation warning）；前端 type-check 与 production build PASS（1888 modules）；基础及开发覆盖 Compose `config --quiet` 均 PASS；fixture 40 条评测报告已重新生成。
 - 未启动、重建或删除现有项目容器与命名卷。宿主机 Wrapper 使用 JDK 17 被 Enforcer 正常拒绝，固定 JDK 21 复验结果作为本次 Java 验收依据。
 
+## 2026-08-14 MeetOps 前端补充闭环验收
+
+- 浏览器 RESCHEDULE ACCEPT 已补齐：先通过“我的会议”创建隔离会议 110，再从智能编排提交真实改期请求 `run_55b08a5cc6d84f1f94c2c68e9db67632`；确认 Sheet 展示 08/25 15:00—16:00 到 16:00—17:00 的 Before/After，点击“接受并改期”后 Run 为 SUCCEEDED。公共会议 API 复核 roomId 117→116、version 0→1，随后将该隔离会议取消清理为 CANCELLED/version 2。
+- 浏览器 CANCEL ACCEPT 已补齐：创建隔离会议 111 后提交 `run_0403de093b0549e7b4660a63d1369201`，取消草案明确展示会议 ID、会议号、房间和时间；点击“确认取消会议”后 Run 为 SUCCEEDED，公共会议 API 复核会议为 CANCELLED/version 1。该流程本身即完成清理，没有遗留有效会议。
+- 浏览器 EDIT 操作已真实触发：`run_4e75590873924b3ebf545ab5bf991ecf` 首轮返回 Top 3，点击候选的“选择并重新校验”后，Trace 记录 `resume_dispatch` 已接收编辑请求并重新提取需求；第二轮因真实模型调用预算耗尽终止为 `BUDGET_EXHAUSTED`（10 次模型调用、3 次 Tool），没有会议写入。因此本轮只证明前端 EDIT 请求、等待态和失败呈现真实可用，不把 EDIT 后再次等待确认记为 PASS。
+- HOT/`WAITING_BUSINESS_RESULT` 已安全复现：`run_76e75f3b9e68450289fe7d878a61e232` 首轮返回 Top 3，浏览器将草案切换并重新校验为 `isHot=true` 的总部楼 VIP 501（room 103），点击“接受并创建”后页面先显示“业务处理中”和请求号 `BR20260813183825F1AA3BCFEC`，随后刷新为“成功/热门预约已确认并写入会议列表”。公共会议 API 复核 Agent 会议 112 为 CONFIRMED，之后已取消清理为 CANCELLED/version 1。
+- 真实模型轨迹补测 `python scripts/live-model-trajectory.py --output artifacts/live-eval/frontend-completion-trajectory.json` 得到 6/8 PASS：CREATE 容量无解 REJECT、CREATE 指名参会者 ACCEPT、政策引用、RESCHEDULE REJECT、隔离 CANCEL REJECT/ACCEPT 通过；重复 RESCHEDULE ACCEPT 因第二次模型轨迹未产生 `hitl.required` 失败，固定会议 ID 9001 因当前数据不存在返回 `MEETING_NOT_FOUND`。报告内容已据实记录后删除本轮临时 artifact，避免越出本次 `frontend/**` 与本文件的写入范围。
+- 本轮所有隔离会议 110、111、112 最终均为 CANCELLED；没有清卷、没有修改 Compose 拓扑或后端/Agent 源码，也没有推送或创建 PR。
+
+## 2026-08-14 MeetOps 前端产品化重构落地与验收
+
+- 已按 `docs/09-frontend-product-redesign.md` 完成可运行实现，不再是固定 40/60 测试台：`WorkspaceShell` 改为 232px 桌面导航和 `<=1024px` 移动 Sheet；智能编排改为最大 920px 的 `ConversationCanvas`、底部 `AgentComposer` 与按需 `OrchestrationSheet`，需求/候选/政策/执行四类结构化结果不再永久占用主画布。左栏最近任务只读取当前标签页真实 `sessionStorage` run/thread，上线登出时清除 `meetops.chat-*` 上下文，避免不同账号继承前一账号会话。
+- Golden Path 保留原 Java 公共 API、POST SSE、`X-Run-Id`、稳定 thread、recovery epoch、轮询和 per-run history；候选或 `WAITING_CONFIRMATION` 只自动打开一次 Sheet，用户关闭后不强开。HITL 继续共用真实 CREATE/RESCHEDULE/CANCEL presenter，EDIT 仍走 `/resume` 并等待新 token；Approvals 只恢复当前标签页真实 `WAITING_CONFIRMATION` Run，不伪造跨 Run 队列。
+- 我的会议新增真实日/周窗口、日历/列表、状态筛选、会议详情和原 CRUD Sheet；390px 默认切为单日列表。会议室默认改为房间行 × 30 分钟列的 availability 资源轴，保留紧凑目录、楼栋/楼层/容量/设备/房型/日期/时间筛选；点击可用格会预填房间及 `[start,end)` 30 分钟时段，EMPLOYEE 只读，ADMIN 显示新增/编辑/启停入口。
+- Trace 分为六步业务进度和技术 Activity 两层；Drawer 与完整 Run 页复用 Agent/Tool/Loop/错误筛选及安全详情 Sheet。Run Overview 只展示后端真实 status、intent、provider/model、Prompt/Schema、耗时、模型/Tool 次数、Token、runId/traceId；详情明确不展示隐藏推理、完整 Prompt、确认令牌或凭据。策略结果没有 citation 时显示“未找到可验证证据”，不会根据回答文本伪造出处。
+- 新增/拆分组件：`ConversationCanvas.vue`、`OrchestrationSheet.vue`、`PolicyCitations.vue`、`ApprovalCard.vue`、`MeetingCalendar.vue`、`RoomDirectory.vue`、`ActivityTimeline.vue`、`TraceDetailSheet.vue`、`RunOverview.vue` 等；样式拆到 `styles/tokens.css`、`base.css`、`shell.css`、`chat.css`、`calendar-resource.css`、`trace.css`、`preview.css`。没有新增 npm 依赖或锁文件；界面文本字符图标已替换为现有 `@lucide/vue`，禁用字符扫描无命中。
+- 构建/部署证据：任务起点执行 `npm ci` PASS（仅本机 Node 24.14.0 与间接包期望 24.15+ 的非阻塞 engine warning）；最终 `npm run type-check` PASS、`npm run build` PASS（Vite 7.3.6，1888 modules）；基础与 dev-overlay 两条 `docker compose ... config --quiet` PASS；使用 `docker compose -f compose.yaml -f compose.dev.yaml up -d --build frontend` 重建最新前端（Compose 因依赖关系也重建 business-service，但未清卷或改拓扑），当前 Compose 定义内全栈服务 healthy。
+- Smoke：提交前再次执行 `python scripts/smoke-day6.py --public-base http://localhost` PASS，输出 `day6PublicSurface=PASS`、12 个 active room、手动会议 created-updated-cancelled、Agent candidates-hitl-reject-trace、room ADMIN RBAC PASS。`python scripts/smoke-day5.py` 首次普通 CREATE 路径实际生成并完成 `run_54c44a57115d45a9be11d3a03f879fc8`：Trace 为 SUCCEEDED、9 次模型调用/9 次 Tool，包含 EDIT 后重新创建草案和 ACCEPT 的 `confirm_booking` WRITE；脚本随后因默认内部 `localhost:8000` 未映射失败，产生的 meeting 105 已通过公共 DELETE 取消。改用 `--public-trace` 重跑通过普通路径后，在 HOT 额外路径因真实模型未选择脚本固定期待的 room 103 而失败，因此本轮不将该脚本的 HOT 固定房间断言记为 PASS。
+- 浏览器真实验收（Compose 页面）：EMPLOYEE `zhangsan` 和 ADMIN `admin` 登录成功，错误密码显示“用户名或密码错误”；连续两轮会话 `run_ee2b9e61e8f345b296f7a0a60acf7da2`、`run_1c9f9a42a12849f993de3f7d461ff9f5` 在刷新后同时保留。`run_3692fbade5614ebc81f3de76a66ed352` 返回真实 Top 3 与 CREATE 草案，切到“我的会议”再返回后 URL、问题、runId 和待确认状态仍在，浏览器随后完成双确认 REJECT，终态 CANCELLED 且无正式写入。Trace Drawer/完整 Run、政策诚实空引用、会议日历/创建表单、房间资源轴/槽位预填、ADMIN 新增房间表单均已打开核验。
+- 响应式/可访问性：实际覆盖 1440×900、1024×768、390×844，三档 `documentElement.scrollWidth == clientWidth`；390px 会议页为单日列表，移动导航 Esc 关闭后焦点返回“打开导航”按钮，Sheet/Dialog 有滚动锁与关闭入口。浏览器验收中发现并修复了移动侧栏焦点在解除 `inert` 前恢复，以及登出后聊天上下文跨账号残留两个问题；提交前复验登录、智能编排、我的会议、待我确认和移动导航，控制台 error 日志为空。
+- 当前限制：待确认页只展示当前标签页 `sessionStorage` 中可恢复的 Run，项目没有跨浏览器的全局 Run 列表 API；Product Preview 不触发后端写入。政策 Run 未返回 citation 时继续展示诚实无证据态。RESCHEDULE/CANCEL ACCEPT 与 HOT/`WAITING_BUSINESS_RESULT` 已在上方隔离数据闭环中验收，不再列为未执行项。
+
 ## 2026-08-13 Refero 前端产品化设计定版与执行交接
 
 - 已将 `docs/09-frontend-product-redesign.md` 更新为唯一权威的 Refero 前端重构规范，替代此前以 Cal.diy 和固定 40/60 双栏为主的旧方案。设计组合已经冻结：Meta AI 用于应用壳与智能编排，Mangomint 用于会议/资源时间轴，TravelPerk 用于 HITL 待确认，n8n 用于 Run Activity/Trace，Copy.ai 仅用于空状态快捷任务。

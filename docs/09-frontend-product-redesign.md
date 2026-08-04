@@ -2,10 +2,10 @@
 
 ## 1. 文档状态与执行边界
 
-- 状态：设计已定版，等待实现。
+- 状态：已按本规范实现并验收；实现证据见 `docs/HANDOFF.md`。
 - 设计定版日期：2026-08-13（Asia/Shanghai）。
 - 修改范围：`frontend/**`；实现完成后由主 Agent 更新 `docs/HANDOFF.md`。
-- 本阶段不修改 Java、Python、Mock 服务、Compose 拓扑或跨服务 API 契约。
+- 本阶段不修改 Java、Python、Compose 拓扑或跨服务 API 契约。
 - 本文替代本文件此前以 Cal.diy 和固定 40/60 双栏为主的方案；Cal.com 仅可作为信息密度参考，不再是主视觉模板。
 
 本文不能覆盖 `SPEC.md` 的冻结决策。登录、Java 公共 API、SSE、候选方案、HITL、Run/checkpoint 恢复、会议 CRUD、会议室管理和安全 Trace 都是真实能力，视觉升级不得改变其语义。没有公共 API 支持的能力必须保持为清楚标记的 Product Preview，不得伪造成功。
@@ -373,4 +373,3 @@ docker compose -f compose.yaml -f compose.dev.yaml config --quiet
 - 不增加真实邮件、真实日历/视频供应商、IoT、SSO、多租户、多级审批或自动移动他人会议。
 - 不虚构跨 Run 待确认列表、楼层平面图、利用率 KPI 或运行记录列表。
 - 不改变 Agent 数量、后端写入语义、30 分钟槽位和时区规则。
-
