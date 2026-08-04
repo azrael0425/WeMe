@@ -57,7 +57,6 @@
 
 - business-service/**
 - agent-service/**
-- mock-services/**
 - SPEC 冻结决策
 - Java/Python API、SSE 事件、Tool、HITL 和数据契约
 - Compose 服务拓扑
@@ -226,4 +225,3 @@ docker compose ps
 
 现在开始，持续实现到可运行、可验证的完成状态。
 ```
-

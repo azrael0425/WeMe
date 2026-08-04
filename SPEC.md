@@ -2,7 +2,7 @@
 
 ## 1. 基线
 
-- Spec版本：1.1。
+- Spec版本：1.2。
 - 项目类型：简历展示型个人完整项目。
 - 开发周期：全职一周，使用Codex辅助开发。
 - 项目语言：Java、Python、TypeScript。
@@ -26,7 +26,7 @@
 11. 所有预约、改期和取消都必须由用户显式确认：Agent发起的写操作使用ACCEPT/EDIT/REJECT HITL并在EDIT后重新校验；手动页面的最终提交本身作为人工确认，不绕行LangGraph，但必须复用同一Java业务校验与事务服务。
 12. RAG只存会议制度和会议规范，支持Markdown与文本型PDF，不做OCR和Rerank。
 13. 用户偏好只保存明确表达的内容，不自动学习隐式偏好。
-14. 外部工具只保留Mock视频会议链接；不做邮箱和空调。
+14. 不接入外部协作工具；不做邮箱、视频会议链接创建和空调。`VIDEO_CONFERENCE` 仅表示会议室具备混合会议设备。
 15. 不做故障注入、完整OpenTelemetry平台、多租户、SSO和复杂审批。
 16. Agent 主链路升级为受控 `Plan -> Act -> Observe -> Verify -> Replan` 循环，不引入 DeepAgents，不增加运行时 Agent 数量；循环只覆盖理解、只读 Tool、验证、求解和冲突重规划，写操作仍由 HITL 后的确定性节点执行。
 17. DeepSeek 使用 OpenAI-compatible 原生 `tools/tool_calls`；模型 Tool 参数必须经 Pydantic Schema、业务上下文约束、权限/风险策略和重复调用指纹校验后才能执行。
@@ -46,7 +46,6 @@
 - 简化RAG与有效引用。
 - 持久化HITL和异步结果恢复。
 - Vue聊天、会议基础管理和Agent Trace。
-- Mock视频会议工具。
 - Docker Compose一键部署。
 - Agent评测和Java压测报告。
 - 原生 Tool Calling 轨迹评测、有界 Loop 停止条件评测、Evaluator 修复评测和并发冲突重规划评测。

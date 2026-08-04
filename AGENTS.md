@@ -39,9 +39,9 @@ P0 必须保留：
 - OR-Tools Top 3 候选、独立硬约束验证器和可解释无解结果。
 - 简化 RAG、可验证引用、HITL、checkpoint 和热门预约结果恢复。
 - Vue 聊天、候选确认、会议基础管理和 Agent Trace。
-- Mock 视频会议工具、Docker Compose、Java 并发测试和 Agent 评测。
+- Docker Compose、Java 并发测试和 Agent 评测。
 
-明确不做：真实邮件、空调或 IoT、真实日历/视频供应商、多租户、SSO、多级审批、复杂访客流程、OCR、Rerank、知识图谱、故障注入、完整 OpenTelemetry/Grafana、Kubernetes、服务网格、分库分表和自动移动他人会议。
+明确不做：真实或 Mock 邮件、视频会议链接与空调/IoT 外部工具、真实日历/视频供应商、多租户、SSO、多级审批、复杂访客流程、OCR、Rerank、知识图谱、故障注入、完整 OpenTelemetry/Grafana、Kubernetes、服务网格、分库分表和自动移动他人会议。`VIDEO_CONFERENCE` 房间设备特征不属于外部工具，继续保留。
 
 进度不足时，按 `P1 -> 页面美化 -> 非 Golden Path 接口` 的顺序削减，不能削减并发正确性、Multi-Agent、OR-Tools、HITL、恢复和 Docker 部署。
 
@@ -70,7 +70,7 @@ P0 必须保留：
 | 主 Agent / Coordinator | 根目录文件、`deploy/**`、`scripts/**`、`docs/**`，以及确需统一维护的跨服务契约 | 任务编排、Compose、环境变量、公共契约、集成、Smoke Test、交接和范围控制 |
 | Java subagent | `business-service/**` | Spring Boot 业务、Flyway、JWT/RBAC、并发预约、Redis、Outbox、RocketMQ、Tool Gateway、SSE 代理及其测试 |
 | Python subagent | `agent-service/**` | FastAPI、LangGraph、DeepSeek Provider、三个专业 Agent、OR-Tools、RAG、HITL/checkpoint、Trace 和评测 |
-| Frontend/Mock subagent | `frontend/**`、`mock-services/**` | Vue UI、SSE/HITL/Trace、会议管理和幂等视频会议 Mock |
+| Frontend subagent | `frontend/**` | Vue UI、SSE/HITL/Trace 和会议管理 |
 
 协作要求：
 
@@ -104,12 +104,12 @@ P0 必须保留：
 - Python 只能访问自己的 `meeting_agent` 数据库、Redis checkpoint 命名空间和 Qdrant collection。
 - 未配置 DeepSeek Key 时，`/internal/v1/health` 必须返回 HTTP 200 且响应体 `status=DEGRADED`；只有进程或基础启动依赖异常才使容器健康检查失败。
 
-### 6.3 Frontend 与 Mock
+### 6.3 Frontend
 
 - 前端使用 Vue、TypeScript 和 Vite，只调用 `/api/v1/**`。
 - SSE、候选卡片、HITL、会议基础管理和 Trace 是功能优先级；复杂动画和页面美化不是 P0。
 - 不展示隐藏推理，只展示 Agent 名称、结构化步骤、工具摘要、引用和业务结果。
-- 视频会议 Mock 与 Agent 服务分离，必须支持 `Idempotency-Key`；真实外部供应商不在范围内。
+- `VIDEO_CONFERENCE` 只作为会议室设备特征参与筛选；系统不创建外部视频会议链接。
 
 ### 6.4 Docker
 

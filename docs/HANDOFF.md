@@ -1,5 +1,12 @@
 # 项目开发交接
 
+## 2026-08-14 删除视频会议链接 Mock
+
+- Spec 升级为 1.2：删除视频会议 Provider Mock、链接创建字段、Java/Python/前端契约、评测维度、部署环境变量、Compose 服务及相关 Smoke 输入；`mock-services/video-provider/**` 已删除。
+- 保留 `VIDEO_CONFERENCE` 会议室设备特征。用户提出“要视频会议设备”仍作为确定性房间硬约束处理，但系统不创建真实或 Mock 视频会议链接。
+- 验证：固定 Java 21 Maven 容器离线 `verify` PASS（61 tests，0 failure/error/skip，Spotless PASS）；Python Ruff PASS、Mypy 41 source files PASS、Pytest 90 passed（1 条上游 pending-deprecation warning）；前端 type-check 与 production build PASS（1888 modules）；基础及开发覆盖 Compose `config --quiet` 均 PASS；fixture 40 条评测报告已重新生成。
+- 未启动、重建或删除现有项目容器与命名卷。宿主机 Wrapper 使用 JDK 17 被 Enforcer 正常拒绝，固定 JDK 21 复验结果作为本次 Java 验收依据。
+
 ## 2026-08-13 Refero 前端产品化设计定版与执行交接
 
 - 已将 `docs/09-frontend-product-redesign.md` 更新为唯一权威的 Refero 前端重构规范，替代此前以 Cal.diy 和固定 40/60 双栏为主的旧方案。设计组合已经冻结：Meta AI 用于应用壳与智能编排，Mangomint 用于会议/资源时间轴，TravelPerk 用于 HITL 待确认，n8n 用于 Run Activity/Trace，Copy.ai 仅用于空状态快捷任务。
@@ -40,10 +47,10 @@
 
 ## 1. 交接元信息
 
-- 最后更新时间：2026-08-12（Asia/Shanghai）。
-- 当前里程碑：Spec 1.1——受控 Agent Loop、原生 DeepSeek Tool Calling、冲突修复和 Evaluator–Optimizer 升级，**代码、全量回归与 fixture 全栈 Smoke PASS**。
+- 最后更新时间：2026-08-14（Asia/Shanghai）。
+- 当前里程碑：Spec 1.2——在保留会议室视频设备特征的前提下删除视频会议链接 Mock；受控 Agent Loop、原生 DeepSeek Tool Calling、冲突修复和 Evaluator–Optimizer 能力不变。
 - Day 1 至 Day 7 已验收回归：**PASS**。
-- Spec 基线：1.1；保留四个运行时 Agent 和既有服务边界，不引入 DeepAgents 或 Critic Agent。
+- Spec 基线：1.2；保留四个运行时 Agent 和既有服务边界，不引入 DeepAgents 或 Critic Agent。
 - Git 状态：`main` 包含 Day 4 基线提交 `31773e2 feat: complete day 4 agent foundation`；Day 5、Day 6 与 Day 7 的已验收改动由本次完成提交记录，未作重置或清理。
 - 运行状态：business-service 与 agent-service 已使用 Spec 1.1 新镜像重建；当前本机 Agent 已切换为 `AGENT_MODEL_PROVIDER=deepseek`、`DEEPSEEK_MODEL=deepseek-v4-flash`，完整基础 Compose 常驻服务 healthy。真实模型业务验收结论见第 20 节。
 - 维护责任：本文件只由主 Agent / Coordinator 更新。
@@ -54,7 +61,7 @@
 
 | 工作流 | 状态 | 证据/说明 |
 |---|---|---|
-| Day 1 骨架、双库和登录/会议室 | DONE | Java/Python/Frontend/Mock、MySQL 双库、Redis、RocketMQ、Qdrant、Nginx 和公共登录链路回归通过 |
+| Day 1 骨架、双库和登录/会议室 | DONE | Java/Python/Frontend、MySQL 双库、Redis、RocketMQ、Qdrant、Nginx 和公共登录链路回归通过 |
 | Day 2 手动预约与并发正确性 | DONE | 30 分钟槽位、MySQL 最终唯一约束、Redis Lua、幂等、CRUD、修改回滚及两组真实 100 并发回归通过 |
 | Day 3 Flyway 与草案 | DONE | V4 创建六张 Day 3 表；CREATE/RESCHEDULE/CANCEL 草案确认前无会议或槽位副作用 |
 | Day 3 HOT 受理与 Outbox | DONE | HOT 确认原子写 `booking_request(PENDING)`、`BOOKING_COMMAND` Outbox、幂等结果并消费确认令牌；HTTP 202 返回 PENDING |
@@ -75,7 +82,7 @@
 - 新增 `scripts/smoke-day3.py`，覆盖内部鉴权、查询 Tool、草案、HOT PENDING、MQ SUCCESS/CONFLICT、Tool 重放、改期/取消确认和 SSE 不可用边界。
 - 新增并修正 `scripts/replay-day3-booking-command.ps1`，发送语义完全相同且 JSON 完整的重复 `BOOKING_COMMAND`，同时核对数据库终态和 MQ 总积压。
 - 亲自审查 Java 事务、Outbox 租约、失败审计、通知接收人、MQ 终态幂等和 SSE 实现；问题优先交回原 Java subagent 修复。
-- 亲自执行固定 Java 21 verify、四个应用镜像构建、真实 MySQL V4、完整 Compose、Day 1/2 回归、两组 100 并发、Day 3 Smoke、MQ 重放和静态安全/范围扫描。
+- 亲自执行固定 Java 21 verify、应用镜像构建、真实 MySQL V4、完整 Compose、Day 1/2 回归、两组 100 并发、Day 3 Smoke、MQ 重放和静态安全/范围扫描。
 - 真实联调发现 RocketMQ 4.9.7 镜像内 Java 8 在 Docker Desktop cgroup v2 上读取消息时初始化 `StoreUtil` 失败；在固定堆参数上加入 `-XX:-UseContainerSupport` 后，原 PENDING 消息无需重发即恢复为 SUCCESS。
 
 ### 3.2 Java subagent（仅 `business-service/**`）
@@ -91,9 +98,9 @@
 - 真实 Tomcat 发现 503 错误曾错误走异步 `StreamingResponseBody`；修为同步普通 JSON，仅成功 SSE 使用异步流，并加入 `asyncNotStarted()` 回归测试。
 - 最终固定 JDK 21 `mvn verify`：33 tests，0 failure/error/skip；Spotless 142 个 Java 文件通过。
 
-### 3.3 Python、Frontend 与 Mock
+### 3.3 Python 与 Frontend
 
-- Day 3 没有修改 `agent-service/**`、`frontend/**` 或 `mock-services/**`，没有启动对应开发 subagent；这些模块保持此前已验收能力。
+- Day 3 没有修改 `agent-service/**` 或 `frontend/**`，没有启动对应开发 subagent；这些模块保持此前已验收能力。
 - 全栈统一构建为 `:day3` 应用镜像并通过健康检查，但这不代表已实现 Multi-Agent、模型调用、聊天、Trace 或视频会议业务。
 - 前端仍只通过 Nginx 访问 Java；本轮公共 HTTP 登录与 API 加载回归通过。Day 3 没有 UI 变更，因此未新增浏览器视觉验收。
 
@@ -179,7 +186,6 @@
 | Java | `meeting-scheduler-business-service:day3` | healthy；readiness UP；非 root；开发端口 18080 |
 | Python | `meeting-scheduler-agent-service:day3` | healthy；HTTP 200；本轮没有模型调用 |
 | Frontend/Nginx | `meeting-scheduler-frontend:day3` | healthy；宿主机端口 80 |
-| Video Mock | `meeting-scheduler-video-provider-mock:day3` | healthy；仅 `/health` 骨架 |
 
 ## 8. 已处理失败、已知问题与阻塞
 
@@ -232,7 +238,7 @@
 
 1. 完整读取 `AGENTS.md`、`SPEC.md`、本文件、`docs/04-agent-spec.md`、`docs/05-data-and-api-spec.md`、`docs/07-test-and-evaluation.md` 和 `docs/08-one-week-development-plan.md`；发生冲突时遵守 `AGENTS.md` 规定的文档优先级。
 2. 运行 `rg --files`、`git status --short`、`docker compose config --quiet` 和 `docker compose -f compose.yaml -f compose.dev.yaml ps`，以文件系统、Git 和可复现命令为准。本交接完成时全仓尚无 Git commit，现有文件显示为未跟踪内容；这些都是用户已有成果，不得删除、覆盖、重置或擅自提交。
-3. 当前 Day 3 完整 Compose 正在运行，应用镜像为 `:day3`，MySQL、Redis、RocketMQ、Qdrant、Java、Python、Frontend/Nginx 和 Video Mock 均为 healthy。不要删除命名卷；若状态已经变化，应重新验证并如实更新本文件。
+3. 当前 Day 3 历史 Compose 状态已经过期；不要删除命名卷，按当前配置重新验证并如实更新本文件。
 4. `.env` 是本地未提交文件，可能包含临时凭据。不得显示、复制到日志或写入文档；不得用 `.env.example` 覆盖它。根目录和 `docs/**` 只由主 Agent 修改。
 5. Day 4 先完成最小 Golden Path：确定性 fixture 输入中文需求，得到受 Pydantic 校验的结构化状态，由 Supervisor 路由，调用一个 Java 只读 Tool，通过 Java SSE 代理输出规范事件，并把 Run/Step/Tool Call 元数据写入 `meeting_agent`。测试不依赖真实 DeepSeek 网络调用。
 6. 最小切片通过后，才在 Day 4 范围内补齐 Supervisor + Requirement/Policy/Scheduling 三个专业 Agent、DeepSeek OpenAI-compatible Provider、有限重试、结构化交接和可验证引用。Retriever、普通 Tool 和确定性处理器不得包装成额外 Agent。
@@ -256,7 +262,7 @@ docker compose -f compose.yaml -f compose.dev.yaml ps
 
 开始修改前，完整读取 D:\agent\AGENTS.md、D:\agent\SPEC.md、D:\agent\docs\HANDOFF.md、D:\agent\docs\04-agent-spec.md、D:\agent\docs\05-data-and-api-spec.md、D:\agent\docs\07-test-and-evaluation.md、D:\agent\docs\08-one-week-development-plan.md；随后用 rg --files、git status --short、docker compose config --quiet 和组合 Compose ps 核验真实状态。发生冲突时严格遵守 AGENTS.md 中的文档优先级。保留所有现有文件、未跟踪内容、用户改动、数据库和命名卷，不得 reset、覆盖、清理或擅自提交；不要泄露本地 .env。
 
-按 AGENTS.md 的目录所有权使用 1 个主 Agent 和最多 3 个不再派生的内部 subagent并行开发：主 Agent 只负责根目录、deploy/**、scripts/**、docs/**、契约裁决、Compose 集成、Smoke 和 HANDOFF；Java subagent 只编辑 business-service/**；Python subagent 只编辑 agent-service/**；Frontend/Mock subagent 只编辑 frontend/** 和 mock-services/**。没有实际工作时不要为凑数修改模块；只有主 Agent 可以编辑 docs/HANDOFF.md。主 Agent必须亲自审查并做跨服务验证。
+按 AGENTS.md 的目录所有权使用 1 个主 Agent 和最多 3 个不再派生的内部 subagent并行开发：主 Agent 只负责根目录、deploy/**、scripts/**、docs/**、契约裁决、Compose 集成、Smoke 和 HANDOFF；Java subagent 只编辑 business-service/**；Python subagent 只编辑 agent-service/**；Frontend subagent 只编辑 frontend/**。没有实际工作时不要为凑数修改模块；只有主 Agent 可以编辑 docs/HANDOFF.md。主 Agent必须亲自审查并做跨服务验证。
 
 Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 DeepSeek OpenAI-compatible Provider 抽象和确定性 fixture、Pydantic AgentState/结构化 Schema、Supervisor 最小路由、Java 只读 Tool Client，以及 Run/Step/Tool Call 元数据落库；让一条普通中文调度需求经结构化、路由、一个 Java 只读 Tool 调用后，通过现有 Java SSE 代理输出 docs/05 规定的标准事件。自动测试不得调用真实 DeepSeek。
 
@@ -282,7 +288,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 - **主 Agent / Coordinator：** 裁决并更新 Day 4 SSE、内部鉴权和 Trace 契约；更新 Compose/安全示例配置；新增真实栈 Smoke；亲自完成跨服务审查、镜像构建、Compose 健康检查和 Smoke。联调中修复 Java HTTP Client 默认 h2c 升级与 Spring Security 异步续接授权造成的 SSE 截断，并补充回归覆盖。
 - **Java 开发 subagent（`business-service/**`）：** 实现 Java→Python SSE 字节透传、上游 2xx + `text/event-stream` 严格校验、稳定 `AGENT_UNAVAILABLE` 错误映射及嵌入式上游集成测试。主 Agent 收尾固定为 HTTP/1.1，并只放行已通过首个请求鉴权的 `ASYNC/ERROR` 调度类型。
 - **Python 开发 subagent（`agent-service/**`）：** 实现 DeepSeek OpenAI-compatible Provider 抽象和无网络 fixture、Pydantic State/Schema、最多一次修复重试、有限网络重试、四 Agent LangGraph、Java READ Tool Client、Qdrant 确定性政策语料/可验证引用、内部 JWT/Service Token 校验，以及 Run/Step/Tool Call 安全摘要持久化与 Trace 查询。
-- **Frontend/Mock：** Day 4 没有前端或 Mock 产品代码变更（按目录所有权不凑数修改）；仍实际运行前端 type-check 和生产 build 回归。
+- **Frontend：** Day 4 没有前端产品代码变更（按目录所有权不凑数修改）；仍实际运行前端 type-check 和生产 build 回归。
 
 ### 13.3 关键文件
 
@@ -302,13 +308,13 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 | 固定 JDK 21 容器中的 `./mvnw -B -ntp verify` | PASS | 36 tests，0 failure/error/skip，Spotless 通过。宿主机没有可用 JDK 21，因此使用 `maven:3.9.11-eclipse-temurin-21` 容器。 |
 | `npm run type-check` 与 `npm run build` | PASS | Vue `vue-tsc --noEmit` 与 Vite 生产构建均通过。 |
 | `docker compose config --quiet` 与组合 Compose `config --quiet` | PASS | 基础与开发端口覆盖解析均有效。 |
-| `$env:AGENT_MODEL_PROVIDER='fixture'; docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait` | PASS | 四个应用镜像构建为 `:day4`，完整组合成功启动；未删除数据库或命名卷。 |
+| `$env:AGENT_MODEL_PROVIDER='fixture'; docker compose -f compose.yaml -f compose.dev.yaml up -d --build --wait` | PASS | 应用镜像构建为 `:day4`，完整组合成功启动；未删除数据库或命名卷。 |
 | `python scripts/smoke-day4.py` | PASS | 普通中文请求依次收到 `run.started`、Supervisor/Requirement/Scheduling step、`resolve_employees` READ Tool、`run.completed`；Trace 有 4 Step 和 1 Tool Call。政策请求经实际 Qdrant 返回 1 个含 `chunkId/title/headingPath` 的引用。 |
 | `/internal/v1/health` 与无 Key 回归 | PASS | 当前组合健康接口为 HTTP 200；`test_health.py` 覆盖未配置 DeepSeek Key 时 HTTP 200 / `status=DEGRADED`。 |
 
 ### 13.5 当前服务状态与已处理问题
 
-- 最终组合 Compose 中 MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、Java、Python、Frontend/Nginx 和 Video Mock 均为 `healthy`；`rocketmq-store-init`、`rocketmq-topic-init` 为预期 `Exited (0)`。
+- 该历史组合 Compose 验收已由当前拓扑取代；`rocketmq-store-init`、`rocketmq-topic-init` 为预期 `Exited (0)`。
 - 第一次真实 Smoke 暴露 JDK `HttpClient` 对明文上游发 h2c upgrade，而 Uvicorn 拒绝该升级；Java SSE client 已明确固定 HTTP/1.1，并有 `Upgrade` 头不存在的回归断言。
 - 第二次真实 Smoke 暴露已提交 SSE 的异步续接被 Spring Security 再次拒绝；仅对 `ASYNC/ERROR` dispatcher 放行，原始 `REQUEST` 继续要求 EMPLOYEE/ADMIN。最终 Smoke 已验证完整终端事件。
 
@@ -331,7 +337,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 - **主 Agent / Coordinator：** 裁决并更新 Day 5 API/SSE/恢复契约；将 Compose 默认镜像标签切换到 `day5`，向 Python 注入 DB 0 业务 Redis 与 DB 1 checkpoint Redis 配置，开启安全的 `AGENT_CALLBACK_ENABLED=true` 默认值；新增真实全栈 `scripts/smoke-day5.py`，亲自完成跨服务审查、构建、Compose 健康检查和 Smoke。
 - **Java subagent（`business-service/**`）：** 新增受 JWT/RBAC 保护的 `POST /api/v1/agent/runs/{runId}/resume`（ACCEPT/EDIT/REJECT，EDIT 仅 roomId/startAt）；严格 HTTP/1.1 SSE 字节代理；新增安全的 public `GET /api/v1/agent/runs/{runId}` 和 `/trace` 代理；完成 `BOOKING_RESULT` 回调，使用业务记录 owner 的当前角色重签 Java AgentContext，非 2xx 由既有 MQ consumer 重投。Trace 会递归剥离 confirmation token、Authorization、JWT、Service Token 等敏感字段。
 - **Python subagent（`agent-service/**`）：** 新增确定性 CandidateBuilder、CP-SAT one-hot/no-good Top 3 求解器、独立 Validator 和稳定无解分类；严格 Tool/模型结构化校验与有限重试；以 Redis 字符串实现真实 LangGraph `BaseCheckpointSaver`（DB 1，24 小时 TTL，fresh saver 可恢复 `interrupt`/`Command(resume=...)`）；接入 DRAFT/HITL/恢复视图/业务回调和 HOT CONFLICT 后重新读取、重求解、重新 Draft 的闭环。所有自动测试均使用 fixture/HTTP mock，不调用真实 DeepSeek。
-- **Frontend/Mock：** 本轮按目录所有权未修改产品代码；仍实际执行 type-check 与生产 build 回归。
+- **Frontend：** 本轮按目录所有权未修改产品代码；仍实际执行 type-check 与生产 build 回归。
 
 ### 14.3 关键文件
 
@@ -356,7 +362,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 ### 14.5 服务健康、已知边界与下一步
 
-- 最终组合 Compose 中 MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、Java、Python、Frontend/Nginx 和 Video Mock 均为 `healthy`；`rocketmq-store-init` 与 `rocketmq-topic-init` 为预期的 `Exited (0)` 初始化容器。
+- 该历史组合 Compose 验收已由当前拓扑取代；`rocketmq-store-init` 与 `rocketmq-topic-init` 为预期的 `Exited (0)` 初始化容器。
 - 当前 Compose 的 Smoke 使用确定性 fixture；DeepSeek Provider 仍通过环境变量可替换。未配置 DeepSeek Key 时 Python health 保持 HTTP 200 / `DEGRADED`。
 - 由于固定 `redis:7.4-alpine` 不含 RedisJSON/RediSearch，没有引入不兼容的官方 Redis checkpoint 扩展；自定义 Saver 是实际 LangGraph `BaseCheckpointSaver`，使用 Redis DB 1 字符串键、24 小时 TTL，并有跨 fresh saver 测试。
 - Day 5 没有遗留实现阻塞。**Day 6 唯一明确起点（仅交接，不在本轮执行）：** 在 `frontend/**` 仅经 Java 公共 API 接入聊天 SSE、候选卡片 ACCEPT/EDIT/REJECT、恢复视图和安全 Trace 展示，再补相应浏览器可见验收。
@@ -373,7 +379,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 - **主 Agent / Coordinator：** 在 `docs/05-data-and-api-spec.md` 冻结 Day 6 会议室详情、30 分钟可用性和管理员管理契约（含 `ACTIVE|INACTIVE`、乐观版本和稳定错误码）；新增 `scripts/smoke-day6.py`；亲自审查跨服务边界、完整 Compose、Day 5 回归和真实浏览器流程。浏览器验收发现默认示例引用未在演示库解析的“李四”以及 REJECT 后残留候选卡，已回派并验证修复。
 - **Java subagent（`business-service/**`）：** 新增 `GET /api/v1/rooms/{id}`、安全的 30 分钟 `[start,end)` availability 视图和 ADMIN-only 创建/更新/启停接口；EMPLOYEE 只见 ACTIVE，ADMIN 可见全部；实现 `ROOM_NOT_FOUND`、`ROOM_CODE_CONFLICT`、`ROOM_STATE_CONFLICT`，并增加会议室管理集成测试。
-- **Frontend/Mock subagent（`frontend/**`）：** 实现 fetch SSE 解析、Agent 时间线、候选卡、ACCEPT/EDIT/REJECT、Run URL 恢复、安全 Trace、HOT 状态轮询；实现我的会议手动创建/编辑/取消和会议室可用性/管理员管理；Nginx 禁用 `/api/` 缓冲与缓存并设置 SSE 读取超时。默认 fixture 请求改为仅张三；候选卡只会在真实 `WAITING_CONFIRMATION` 且有草案/令牌时显示。
+- **Frontend subagent（`frontend/**`）：** 实现 fetch SSE 解析、Agent 时间线、候选卡、ACCEPT/EDIT/REJECT、Run URL 恢复、安全 Trace、HOT 状态轮询；实现我的会议手动创建/编辑/取消和会议室可用性/管理员管理；Nginx 禁用 `/api/` 缓冲与缓存并设置 SSE 读取超时。默认 fixture 请求改为仅张三；候选卡只会在真实 `WAITING_CONFIRMATION` 且有草案/令牌时显示。
 - **Python：** Day 6 未修改 `agent-service/**`；Day 5 已验收的 fixture、OR-Tools、HITL、checkpoint 与回调链路作为本轮跨服务回归对象继续通过。
 
 ### 15.3 关键文件
@@ -397,7 +403,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 ### 15.5 当前服务状态、未完成项与 Day 7 唯一明确起点
 
-- 最新 `docker compose ps`：MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、business-service、agent-service、frontend 与 video-provider-mock 均为 `healthy`；`rocketmq-store-init` 和 `rocketmq-topic-init` 是预期的 `Exited (0)` 初始化容器。
+- 该历史 `docker compose ps` 结果已由当前拓扑取代；`rocketmq-store-init` 和 `rocketmq-topic-init` 是预期的 `Exited (0)` 初始化容器。
 - Day 6 没有遗留实现阻塞。前端没有另引入测试框架；严格 TypeScript、生产构建、公共接口 Smoke 和真实浏览器验收共同覆盖本轮变更。
 - **Day 7 唯一明确起点（仅交接，不在本轮执行）：** 按 `docs/08-one-week-development-plan.md` 的 Day 7，在不增加产品功能前提下先建立 Agent 评测集和可复现评测/压测证据，再进行空卷 Docker Smoke、README/架构材料和最终包装。
 
@@ -414,7 +420,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 - **主 Agent / Coordinator（根目录、`docs/**`、`scripts/**`、Compose）：** 修正 `New-LocalEnv.ps1` 的安全占位替换与 `Test-Day7EmptyVolume.ps1` 的可重复空卷验收；扩展 Smoke 的显式 Compose/project 参数与失败诊断；为 Compose 增加保守资源上限；完成 README、部署文档、镜像清单和本交接。亲自执行全栈重建、空卷三连测、Day 5/6 公共 API Smoke、真实 HTTP 并发验证、静态安全扫描和最终 Compose 健康检查。
 - **Java subagent（仅 `business-service/**`）：** 扩充 `MeetingConcurrencyIntegrationTest` 的 CT-03/04/05，并新增连续 HOT 受理后的再入回归；无生产分支改动，证明 Java HOT 标志和确认路径不会因前序 SUCCESS/CONFLICT 改走同步预约。
 - **Python subagent（仅 `agent-service/**`）：** 新增离线 40 条评测集与可执行报告、fixture 兼容回归；为相同 Run 的 resume/callback 引入转换锁；修复 Starlette/AnyIO 与 LangGraph 同步生成器的跨线程续跑竞态，改为专用生产线程加逐帧 Queue SSE，并为 Redis checkpoint 的 load/mutate/save 加锁与同步 durability。新增线程亲和、checkpoint 并发和早到回调重试测试。
-- **Frontend/Mock subagent：** Day 7 未增加产品功能；主 Agent 重新执行了已有 Vue TypeScript 检查和 production build，确认 Day 6 浏览器链路不回归。
+- **Frontend subagent：** Day 7 未增加产品功能；主 Agent 重新执行了已有 Vue TypeScript 检查和 production build，确认 Day 6 浏览器链路不回归。
 
 ### 16.3 关键文件
 
@@ -441,7 +447,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 ### 16.5 服务状态、已知限制与下一步
 
-- 最终 `docker compose -f compose.yaml -f compose.dev.yaml ps`：MySQL、Redis、RocketMQ NameServer/Broker、Qdrant、business-service、agent-service、frontend、video-provider-mock 均为 `healthy`；两个 RocketMQ 初始化服务为预期的 `Exited (0)`。
+- 该历史组合 Compose 结果已由当前拓扑取代；两个 RocketMQ 初始化服务为预期的 `Exited (0)`。
 - 最终主栈 Smoke 曾发现一个**旧本地环境**的 `AGENT_CALLBACK_ENABLED` 覆盖值关闭了回调消费者；未读取或修改 `.env`，仅为本次 Compose 进程以 `true` 覆盖，并确认 `.env.example` 的安全默认值已是 `true`。这不是代码、MQ 或 checkpoint 失败。
 - Agent 评测是 fixture/InMemory RAG/确定性求解器基线，不能替代真实 DeepSeek 质量评估；HTTP 压测是单台 Docker 开发机结果，不能视为生产容量或 SLO。
 - Day 7 没有遗留实现阻塞。**下一条允许任务：** 仅在用户明确给出 Day 8 或新的书面范围后再开始；本轮到此停止。
@@ -452,7 +458,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 - 用户已明确授权下一阶段优先进行前端与产品设计升级，暂不修改 Java 后端和 Python Agent。
 - 产品工作名为 `MeetOps 企业协作编排助手`，视觉和信息架构以 Cal.diy 的紧凑企业 SaaS 风格为参考，并计划使用 shadcn-vue 作为 Vue 组件基础。
-- 本轮只完成书面设计与执行提示词，**没有修改 `frontend/**`、`business-service/**`、`agent-service/**` 或 `mock-services/**`，不得将本节解释为前端已经实施完成。**
+- 本轮只完成书面设计与执行提示词，**没有修改 `frontend/**`、`business-service/**` 或 `agent-service/**`，不得将本节解释为前端已经实施完成。**
 
 ### 17.2 权威文档
 
@@ -474,7 +480,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 
 ### 18.1 结论与范围
 
-- **Day 8 前端产品化升级：PASS。** `frontend/**` 已从 Day 6 功能演示升级为 `MeetOps 企业协作编排助手`；本轮没有修改 `business-service/**`、`agent-service/**`、`mock-services/**`、Compose 拓扑或跨服务 API/事件语义。
+- **Day 8 前端产品化升级：PASS。** `frontend/**` 已从 Day 6 功能演示升级为 `MeetOps 企业协作编排助手`；本轮没有修改 `business-service/**`、`agent-service/**`、Compose 拓扑或跨服务 API/事件语义。
 - 浏览器仍只访问 Java `/api/v1/**`。`src/api/client.ts`、`src/api/types.ts`、auth、POST SSE、Run URL 恢复、HITL 和 HOT 状态轮询语义保持不变；Trace 不展示隐藏推理或确认令牌。
 - 本节覆盖并取代第 17 节“尚未实施”的状态描述；第 17 节仍保留为设计决策来源和实施前基线。
 
@@ -607,7 +613,7 @@ Day 4 先完成最小 Golden Path：在 agent-service 中实现可替换的 Deep
 | Java 21 `./mvnw -B -o -ntp verify` | PASS | 61 tests，0 failure/error/skip；Jar 与 Spotless PASS。最终 business 镜像构建内再次执行同一 61 tests 并 PASS。首次在线 build 曾因 Maven Central 下载中断失败，重试后成功，不计作测试失败。 |
 | Python `ruff` / `mypy app` / `pytest` | PASS | Ruff PASS；mypy 39 source files；76 passed，仅 1 条上游 LangGraph pending-deprecation warning。 |
 | Frontend `npm ci` / `type-check` / `build` | PASS | 463 packages；仅 Node 24.14.0 对一个传递依赖的 engine warning；Vue type-check PASS，Vite build 88 modules PASS。 |
-| 基础/开发 Compose config、镜像 build、`up --wait` | PASS | 两套 config PASS；Java/Python/Frontend 镜像均完成构建；MySQL、Redis、RocketMQ、Qdrant、Java、Python、Frontend、Video Mock 全部 healthy，初始化容器 Exited (0)。未删除命名卷。 |
+| 基础/开发 Compose config、镜像 build、`up --wait` | PASS | 两套历史 config PASS；Java/Python/Frontend 镜像均完成构建；初始化容器 Exited (0)。未删除命名卷。当前拓扑需重新验证。 |
 | `component-fixture` 40 条 | PASS（组件门禁） | `networkCalls=0`；Intent/Tool/Citation=100%，Constraint F1=96.76%，硬约束 60 candidates/0 violation；`componentTaskSuccess=82.5%`，不是 E2E。 |
 | `live-model-component` core 12 × 3 | PASS | DeepSeek `deepseek-v4-flash`：36 samples；Route 100%，Intent 97.22%，Constraint F1 100%，Tool 94.44%，Source violation 0，Native Tool 100%，Citation 100%；P50 3.53s/P95 6.89s。 |
 | `live-model-component` full 40 × 1 | **FAIL** | Route/Intent 100%，Constraint F1 89.05%，Native Tool 100%；但 Tool 80% < 90%、Source violation 1 > 0、Citation 80% < 100%。因此整体 live-model component 严格结论为 FAIL，不能用 core PASS 覆盖。 |
