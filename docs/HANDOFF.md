@@ -1,5 +1,50 @@
 # 项目开发交接
 
+## 2026-08-14 需求状态语义与失败续聊记忆修复
+
+- 根因一：首次 Requirement 卡片把非刚需可选条件统一写成 `EXPLICIT`，因此用户未提设备、地点等条件时也被错误展示为“已明确”。现将其拆为 `UNSPECIFIED`（未说明）、`EXPLICIT`（明确提出）和 `CLOSED`（明确表示没有其他要求）；三种状态都不阻塞调度，首次未说明只做友好提示。
+- 根因二：正常 `WAITING_USER_INPUT` 续聊一直复用原 Run/checkpoint，但 Run 因模型或步骤预算进入 `FAILED` 后，前端会清空旧 Run 并创建全新 Run，导致已确认需求丢失。现在失败任务恢复页保留最后有效 Requirement；下一次输入显式携带 `baseRunId` 创建新 Run，只继承同用户、同 thread 的需求基线，并重置模型/Tool预算、候选、草案、确认令牌、业务结果和工具调用指纹。
+- 增量合并：人员修改新增确定性 `ADD/REMOVE/REPLACE` 语义。“赵六请假不会来/去掉赵六”会从已验证名单删除赵六，不再依赖模型完整重述名单；当前输入未修改的日期窗口、时长、人员和设备继续继承。`投屏` 规范为 `LARGE_SCREEN`，避免同时保留原始词和标准设备码；“最好2点”继续作为软偏好，不能覆盖 8 月 25 日窗口。
+- 调度恢复：Scheduling Agent 若在有限轮次内未调用所需只读工具，会保存当前需求并返回可继续状态，避免单纯因局部工具调用不足让整个会话丢失；Trace 会列出仍缺少的工具事实。Prompt/State 版本更新为 `meeting-agent-prompts-v6` / `meeting-agent-state-v5`。
+- 契约与界面：公共新 Run SSE 请求新增可选 `baseRunId`；recovery 新增 `requirementBaselineAvailable`。失败但可恢复的任务继续展示需求卡，并提示“将从这版有效需求创建恢复任务”；前端状态文案新增“未说明/已结束”。非法或越权基线稳定返回 HTTP 409 `REQUIREMENT_BASELINE_NOT_RECOVERABLE`。
+- 自动化证据：Java 固定 JDK 21 Maven `verify` PASS（64 tests，0 failure/error/skip）；Python Ruff PASS、Mypy 41 source files PASS、Pytest **113 passed**（仅 1 条上游 LangGraph pending-deprecation warning）；前端 type-check 与 production build PASS（Vite 1888 modules）；基础与开发覆盖 Compose 配置 PASS，最新三应用镜像已重建，当前 8 个长驻服务全部 healthy。
+- 真实浏览器证据：Run `run_b5c2ae92481149a29ba04eb52c0ed534` 首轮显示 2026-08-25 12:00–18:00、通讯录 4 人、缺时长及“其他要求：未说明”；同一 Run 输入“赵六请假不会来，会开2个小时，要有投屏，没别的要求，最好是2点开始”后生成 08/25 14:00–16:00 Top 3，草案必需参会者仅张三、李四、王五。旧失败 Run `run_d379f9517c9a46bdb423d96a5b77c266` 输入“参会人去掉赵六，继续查询”后创建恢复 Run `run_a86a9c6828794e158325c4f41050b299`，仍保留原日期、2 小时时长、投屏和 14:00 偏好并进入 `WAITING_CONFIRMATION`。两条验收均未接受草案，没有正式会议写入。
+
+## 2026-08-14 多轮需求收敛与默认补全
+
+- 结论：已完成“明确值直接采用、可确定信息默认补全、缺失刚需集中追问、模糊信息基于可信目录推定后让用户纠正”的多轮编排闭环。会议查询只有时间范围、会议时长和必需参会人全部清晰后才进入忙闲/会议室/草案工具；投屏、白板、视频会议设备、地点等非刚需首次集中提示，用户可用“没别的要求”结束可选项询问。
+- 时间规则已确定性落地：几号默认当月、周几默认当周、只有时间默认当天；上午 06:00–12:00、中午 11:00–14:00、下午 12:00–18:00、晚上 18:00–次日 06:00，均使用 `Asia/Shanghai` 与 `[start,end)`。单独“2点”保留为上午/下午歧义；只有开始时间时跨轮保留到时长补齐；“最好2点”是软偏好，不能覆盖已有日期窗口。真实浏览器回归曾捕获 Provider 将该软偏好提升为当天硬时间的缺陷，现已由确定性合并层清除并新增回归测试。
+- 人员规则：新增 Java READ Tool `resolve-participant-scope`，只从已验证的 AgentContext 解析当前用户及其 ACTIVE 部门成员，不信任模型传入身份；“小组会议”暂按当前所属部门推定，返回张三、李四、王五、赵六并明确可增删纠正。组织者不会在容量计算中重复计数。
+- 多轮协议：新增公共 `POST /api/v1/agent/runs/{runId}/input`、Python 内部同名输入端点、`expectedRevision + clientRequestId` 并发/幂等保护和 SSE `requirement.updated`。补充信息复用原 `runId` 和 checkpoint，从 Requirement 节点继续；非法状态或修订冲突稳定返回 HTTP 409 `AGENT_RUN_STATE_CONFLICT`。Prompt/State 版本更新为 `meeting-agent-prompts-v5` / `meeting-agent-state-v4`。
+- 前端：`WAITING_USER_INPUT` 下直接在当前任务继续输入；新增“已整理的会议需求”卡片，区分“已默认 / 待补充 / 组织库补全 / 已明确”，显示版本号与纠错提示；恢复后不重复插入同一轮历史，底部输入区不会遮住需求卡。
+- 详细方案与契约见 `docs/13-multi-turn-requirement-convergence.md`、`docs/01-functional-spec.md`、`docs/03-java-backend-spec.md`、`docs/04-agent-spec.md`、`docs/05-data-and-api-spec.md`，冻结决策已同步到 `SPEC.md`。
+- 自动化证据：Java 固定 JDK 21 Maven `verify` PASS（64 tests，0 failure/error/skip，Spotless/Jar PASS）；Python Ruff PASS、Mypy 41 source files PASS、Pytest **109 passed**（仅 1 条上游 LangGraph pending-deprecation warning）；前端 type-check + production build PASS（1888 modules）；基础与开发覆盖 Compose 配置 PASS。
+- 真实 DeepSeek + 浏览器证据：首轮 Run `run_6f05c04ef8d14ed2a527344e66e3d34b` 返回 2026-08-25 12:00–18:00、缺时长、通讯录 4 人及可选设备提示；同一 Run 输入“会开2个小时，要有投屏，没别的要求，最好是2点开始”后进入 `WAITING_CONFIRMATION`，Top 3 均为 08/25 14:00–16:00 且筛选投屏设备。未点击接受，没有产生正式会议写入；浏览器控制台 error 为 0。
+- 部署：最新 Agent 与前端镜像已重建并启动，未删除或重置任何命名卷。当前实现的剩余非阻塞项仅为上游 LangGraph serializer 默认值 pending-deprecation warning。
+
+## 2026-08-14 Agent 澄清体验与候选窗口修复
+
+- 结论：用户报告的原始请求已修复。`timeWindow` 现在明确表示候选搜索窗口，`durationMinutes` 表示单场会议时长；“2026-08-25 13:00 到 18:00 之间 + 60 分钟”不再触发 `DURATION_INTERVAL_MISMATCH`。Supervisor 的“给出候选、不要确认”被视为 HITL 指令，不再把 CREATE 误判为 RECOMMEND_ROOM。
+- 用户可见澄清采用混合边界：Evaluator/Tool/Java 只产生结构化问题和可信事实，现有 Supervisor 只负责普通中文表达；Pydantic 拒绝内部错误码和未验证写入结论，确定性校验拒绝来源之外的数字/时间，模型不可用或输出不合格时回退中文模板。没有新增第五个运行时 Agent，也没有给模型新增 DRAFT/WRITE 权限。
+- 关键信息缺失、固定起止/时长冲突、目标会议不唯一、人员/容量/设施证据异常和通讯录人员无法匹配均有普通中文解释及下一步输入要求；内部码仍保留在 Trace/日志用于诊断，但不再直接拼接到 `answerSummary`。
+- Prompt 版本更新为 `meeting-agent-prompts-v4`；状态 Schema 保持 `meeting-agent-state-v3`，公共 Java API/SSE 字段未变化。`docs/04-agent-spec.md` 已补充澄清契约、安全校验和候选窗口语义。
+- Python 门禁：`uv run ruff check .` PASS；`uv run mypy app` PASS（41 source files）；`uv run pytest -q` **97 passed**，仅 1 条上游 LangGraph pending-deprecation warning。新增精确原始请求、固定区间冲突、内部码/虚假写入拒绝、自然语言缺失信息和通讯录人员无法匹配回归。
+- 真实 DeepSeek 公共链路：本机未提交 `.env` 的 `deepseek-v4-flash` 重放原始请求，最新 Run `run_559e50a75bf34183bbfc898e000705e4` 为 `WAITING_CONFIRMATION`，SSE 同时包含 `plan.candidates`（Top 3）与 `hitl.required`，不包含 `EVIDENCE_NOT_IN_SOURCE` / `DURATION_INTERVAL_MISMATCH`，`promptVersion=meeting-agent-prompts-v4`。此前诊断 Run 仅用于定位模型把 HITL 指令误判为推荐意图，没有执行正式写入。
+- 浏览器实测：登录后直接打开最新 Run，页面显示“方案正在等待确认”，编排详情的“候选 3”包含 13:00、13:30、14:00 三个 60 分钟候选；内部码可见数量为 0，浏览器控制台 error 为 0，未点击“接受并创建”。
+- 部署：最终 Agent 镜像已重建并启动；未删除或重置任何命名卷。基础与开发覆盖 Compose 配置通过，当前 8 个长运行服务全部 healthy，前端继续可从 `http://localhost` 检查。
+
+## 2026-08-14 全面测试验收
+
+- 结论：**有条件通过，不建议标记为零缺陷最终验收**。最新代码的模块门禁、全栈健康、公共业务面、并发最终一致性、RAG 入库/检索和真实浏览器均通过；但 Day 5/Day 7 确定性 Golden Path 的 HOT 固定房间断言与扩充后的 V6 演示数据不再一致，导致 checkpoint 重启后的普通路径完成后在 HOT 阶段失败，需修复 fixture/Smoke 后再做最终签字。
+- 模块门禁：Python `uv sync --frozen --group dev`、Ruff、Mypy 41 source files、Pytest **90 passed**；前端 `npm ci`、type-check、Vite production build **1888 modules** PASS。Java 最新源码通过仓库 Docker build 的固定 JDK 21 `verify` 层，镜像内 Surefire 证据为 **61 tests、0 failure/error/skip** 且 Jar 存在；独立无缓存/临时容器复验因 Maven Central 多次返回截断下载失败，属于外部依赖网络问题，不能算代码测试失败，也未伪造为无缓存 PASS。
+- 全栈与数据：基础/开发覆盖 Compose `config --quiet` PASS；最新三应用镜像重建，8 个长驻服务 healthy。RAG Smoke 为 22/22 文档 INDEXED、307 个注册 chunk 与 Qdrant point 一致，VIP/架构评审代表检索均命中。静态扫描确认 `.env` 未跟踪、无构建产物/常见真实密钥、前端无 Python/internal 直连、无视频 Provider Mock 残留引用。
+- 公共业务面：Day 1 健康/登录/12 间 ACTIVE 房 PASS；Day 2 在 Agent 容器停止时仍完成 90 分钟会议三槽位、幂等重放、同键异参拒绝、失败修改回滚、成功修改、查询和取消，证明手动链路独立；Day 6 会议 created-updated-cancelled、Agent candidates/HITL REJECT/Trace、房间 availability 和 ADMIN RBAC PASS。
+- 并发：真实 HTTP 同房间 100 请求结果为 1 success / 99 conflict / 1 unique meeting（P50 597.03 ms、P95 1058.41 ms、P99 1257.88 ms）；同幂等键 100 请求为 100 success / 1 unique meeting（P50 601.26 ms、P95 2562.42 ms、P99 2666.92 ms）。
+- Agent 组件评测：40 条 `component-fixture`，Intent/Tool/Citation=100%，Constraint F1=96.13%，60 candidates/0 hard-constraint violation，`componentTaskSuccess=82.5%`；它是组件评测，不冒充 E2E。当前 `.env` 为真实 DeepSeek provider，本轮未额外执行有调用成本且非确定性的完整 live-model 轨迹；既有真实模型证据保留在前述交接章节。
+- 隔离空卷：独立 Compose project 从全新卷成功启动，8 个长驻服务 healthy，Flyway V1→V6、Alembic、RAG 初始化、普通候选→EDIT→checkpoint 重启→新草案→ACCEPT 均已越过；随后 `scripts/smoke-day5.py` 以“必须选 room 103”为固定断言失败。V6 已扩充可行房间，当前 fixture 选择其他 HOT/普通候选，因此该断言已过期；失败 project 容器/网络已停止，按脚本安全规则保留新命名卷。
+- 浏览器：EMPLOYEE/ADMIN 登录与角色 UI、智能编排、我的会议日历、待确认、会议室 30 分钟资源轴及管理员入口通过；1440×900、1024×768、390×844 覆盖，390/1024 无横向溢出，移动导航可打开，控制台 error 为空。
+- 维护问题：`scripts/smoke-day3.py` 仍断言当前 Agent SSE 必须返回 `AGENT_UNAVAILABLE`，与 Day 5/6 已上线 Agent 端点冲突；`scripts/smoke-day1.ps1` 的默认 Java 地址仍是未覆盖的 `localhost:8080`（开发覆盖实际为 18080）。二者需更新，避免旧日脚本对当前版本产生假失败。
+
 ## 2026-08-14 删除视频会议链接 Mock
 
 - Spec 升级为 1.2：删除视频会议 Provider Mock、链接创建字段、Java/Python/前端契约、评测维度、部署环境变量、Compose 服务及相关 Smoke 输入；`mock-services/video-provider/**` 已删除。
