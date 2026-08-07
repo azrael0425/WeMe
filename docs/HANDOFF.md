@@ -1,5 +1,17 @@
 # 项目开发交接
 
+## 2026-08-14 完整会议生命周期 Golden Path 与冲突重规划修复
+
+- 结论：已按 `docs/14-meeting-lifecycle-golden-path.md` 将“支付网关 V2 上线架构评审”设为会议 Agent 的当前 Golden Path，并完成创建需求收敛、改期目标识别、原会议约束继承、排除自身占用、结构化无解解释、推荐时间续聊重规划、取消和三类 HITL 草案链路。Prompt/State 已更新为 `meeting-agent-prompts-v7` / `meeting-agent-state-v6`，运行时 Agent 数量仍固定为 Supervisor + Requirement/Policy/Scheduling。
+- 改期语义：目标会议选择条件与目标时间窗口现为两个独立字段；系统先通过 Java 最近会议事实源唯一定位目标，零匹配或多匹配时继续询问，不猜测也不读取无关忙闲。定位后由 Java 回填原会议标题、时长、必需/可选参会者、容量和设备，未被用户修改的字段标为 `INHERITED`；“改到 27 号同一时间”和中文“两点”等表达由确定性层校正，不再受模型错误重写影响。
+- 冲突与重规划：忙闲及房间查询新增受鉴权的 `excludeMeetingId`，改期时仅排除当前用户可管理且仍为 `CONFIRMED` 的目标会议，避免原会议占用与自己冲突；Java 返回完整正式会议区间和会议 ID，不再把跨窗口占用裁成零散 30 分钟片段。无解结果统一为 `UnsatAnalysis`，包含请求窗口、时长、人员/房间/政策阻塞项、冲突会议 ID、完整起止时间、摘要和放宽建议，并通过 `plan.unsat` 在前端结构化展示。
+- 同 Run 续聊：无解不再错误终止为 `SUCCEEDED`，而是进入 `WAITING_USER_INPUT`；用户输入“按你推荐的最近可行时间”时，保留目标会议和全部已确认/继承约束，重置旧候选、草案和 Tool 指纹，按阻塞结束时间重查完整忙闲与房间，随后生成新的 RESCHEDULE HITL。Scheduling 在 Java 目标回填后再次发送同修订版 `requirement.updated`，因此界面不会把已继承的时长、人员和设备错误显示为“待补充”。
+- 前端：新增无解分析卡片，按资源类型展示冲突人员/会议室、时间段、会议 ID 与可操作建议；`plan.unsat`、恢复态和 `INHERITED` 标签均可在刷新后恢复。首次创建中用户没说的其他要求继续显示“未说明”，只有用户明确说“没别的要求”才显示为已结束，不再伪装成“已明确”。
+- 自动化证据：Python Ruff PASS、Mypy 41 source files PASS、Pytest **123 passed**（仅 1 条上游 LangGraph pending-deprecation warning）；Java 最新固定 JDK 21 Compose build 中 Maven `verify` **66 tests、0 failure/error/skip** 且 Spotless/Jar PASS，另有 19 项 Agent Tool 定向回归通过；前端 type-check 和 production build PASS（Vite 1890 modules）。基础与开发覆盖 Compose `config --quiet` 均 PASS，当前 8 个长驻服务全部 healthy。
+- 跨服务 Smoke：`python scripts/smoke-day6.py --public-base http://localhost` PASS，输出 `day6PublicSurface=PASS`、12 间 ACTIVE 房、手动会议 created-updated-cancelled、Agent candidates-hitl-reject-trace 和 room ADMIN RBAC PASS。
+- 真实 DeepSeek + 浏览器证据：创建请求首轮已验证 08/25 下午默认窗口、通讯录小组补全、缺少时长及“其他要求：未说明”；最终改期 Run `run_fc6925b1fc89457fb362e4e0cf37f89f` 将 08/25 13:00 的会议准确定位为目标，继承 60 分钟、张三/李四和 `LARGE_SCREEN + WHITEBOARD`，对 14:00–15:00 请求详细列出张三、李四及会议 122 的 14:00–16:00 冲突并建议 16:00；同一 Run 输入“按你推荐的最近可行时间”后得到 16:00–17:00 Top 3 和 Before/After RESCHEDULE 草案。浏览器最终选择 REJECT，因此没有修改正式会议；页面控制台 error 为 0。
+- Git 与环境：实施前版本已按用户要求提交为 `c5052fd feat(agent): support multi-turn requirement convergence`；本节描述的后续 Golden Path 修改当前保留为未提交工作区，便于用户验收后决定提交。未删除或重置任何命名卷，也未输出本地 `.env`。宿主机仍是 JDK 17，因此 Java 当前源码以固定 JDK 21 Docker 构建结果为验收证据。
+
 ## 2026-08-14 需求状态语义与失败续聊记忆修复
 
 - 根因一：首次 Requirement 卡片把非刚需可选条件统一写成 `EXPLICIT`，因此用户未提设备、地点等条件时也被错误展示为“已明确”。现将其拆为 `UNSPECIFIED`（未说明）、`EXPLICIT`（明确提出）和 `CLOSED`（明确表示没有其他要求）；三种状态都不阻塞调度，首次未说明只做友好提示。
