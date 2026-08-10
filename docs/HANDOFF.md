@@ -1,5 +1,26 @@
 # 项目开发交接
 
+## 2026-08-15 前端成品化与真实演示工作区
+
+- 结论：**PASS。** 已按 `docs/18-frontend-productization-and-demo-workspace.md` 完成全部用户可见主路径的成品化整改。智能编排、待我确认、我的会议、会议室、消息中心、异常重排和会前会后均移除重复说明、时区标签、预览措辞及内部编号；会议类型、房型、状态和人员选择统一为中文产品表达。旧静态 `preview.ts`、Product Preview 标识和静态会前会后路由已删除。
+- 日历与资源：会议周视图固定为周一至周日、08:00 至 00:00，默认展示有效会议并过滤 Day/Smoke/验收/并发/幂等及 `CONCURRENCY_TEST` 技术记录。会议室共有 20 间启用资源、12 种中文房型和 8 类设备；日期与筛选变化会自动查询，递增请求序号阻止旧响应覆盖新日期，服务端未返回的槽位显示“待查询”而不是“不可用”。实机切换 08/17 与 08/18 均得到 438 个可用槽位、2 个占用槽位、0 个待查询槽位。
+- 人员与数据：新增安全 `GET /api/v1/directory/employees`，仅返回在职员工的 ID、姓名、部门和角色，不返回用户名、邮箱或密码字段；会议创建与会议室快速创建均改为姓名/部门多选。Flyway V10 在演示开关开启时增量写入 12 位在职员工、8 间会议空间、4 类设备、16 场跨 8 个部门的可信会议及部门消息，不删除既有并发审计记录、不覆盖现有账号、不重置命名卷。当前持久库公开目录有 28 位在职员工、20 间启用会议室。
+- 消息：产品消息集合统一排除 Day/Smoke/验收、英文 `Meeting confirmed`、裸 `meetingId` 等历史 fixture，并同步修正侧栏未读数字；普通新通知仍保留，通用标题会结合具体会议名展示。张三最终页面只显示研发周会调房、材料缺失、客户共创确认、行动项临期/逾期、会议室恢复、预算资料范围等 9 条业务消息，未读数为 6。
+- 自动化证据：固定 JDK 21 `./mvnw -B -ntp verify` **82 tests，0 failure/error/skip**，Flyway V1–V10、Jar、Spring Boot repackage 和 Spotless PASS；前端 `npm run type-check` 与生产构建 PASS（Vite 1895 modules）；基础 Compose `config --quiet` PASS。`scripts/smoke-day6.py` 输出 20 间 ACTIVE 房、手动会议 created-updated-cancelled、Agent candidates/HITL/trace 与房间 RBAC PASS；员工通知 Smoke 和会前会后 Smoke 均 PASS。
+- 真实部署与浏览器：真实 MySQL 从 V9 增量迁移到 V10，业务、Agent、前端、MySQL、Redis、Qdrant 与 RocketMQ 长驻容器均 healthy，入口为 `http://localhost`。桌面及 390×844 移动视口验证五个核心页面均无横向溢出；智能编排指定冗余文案、技术会议、英文枚举、会议号/房间编码、技术消息和顶栏状态均不可见。浏览器验收只切换筛选和日期，没有提交业务写入。
+- Git 与边界：实施前版本仍为 `60ce87b feat(replan): complete resource failure recovery flow`；当前会前会后闭环与本次前端成品化改动保留在未提交工作区，等待用户检查后决定是否提交。没有新增外部平台、RSVP、附件二进制、政策结果绑定或统计复盘能力。
+
+## 2026-08-14 会前会后真实闭环
+
+- 结论：**PASS。** 已按 `docs/17-pre-post-meeting-closure-design.md` 将原静态“会前会后”预览替换为真实业务闭环。冻结范围仅包含会前议程、材料元数据、动态准备清单、24 小时/30 分钟与缺失项站内提醒；会后自动完成、文本记录生成结构化草案、发起人/ADMIN 的 `EDIT/REJECT/ACCEPT` HITL、正式纪要/决策/行动项和临期/逾期催办。RSVP、签到、附件二进制、政策结果绑定、统计复盘和外部平台同步均未实现，旧 `preview.ts`、Product Preview 标识和静态页面已删除。
+- Java 事实源：Flyway V9 新增准备版本、议程、材料、提醒投递、会后草案、正式纪要/决策/行动项和行动项提醒表；大文本使用 `MEDIUMTEXT`。公共 lifecycle API 覆盖聚合查询、会前保存、草案创建、审核和行动项状态更新；权限、会议状态、独立乐观版本、负责人白名单、字段上限和 `Asia/Shanghai +08:00` 均由 Java 最终校验。外部 Agent HTTP 不在数据库事务内，只有 `ACCEPT` 才在单事务中写正式记录。
+- 定时闭环：Java 有界扫描将 `endAt <= now` 的 `CONFIRMED` 幂等转为 `COMPLETED`；会议 24 小时/30 分钟提醒、准备缺失、行动项临期/逾期均写既有站内通知。投递表以会议开始时间或行动项截止时间作为事实快照并由唯一键去重，重复扫描不会重复通知。
+- Python 与前端：Python 没有新增运行时 Agent，复用现有 Requirement Agent 的 `POST_MEETING_ANALYSIS` 模式和一次结构化修复，未知负责人确定性归一为 `null`，不调度、不调用 Java WRITE Tool、不持久化 Java 业务对象。前端新增真实 `/lifecycle` 页面及旧路径兼容别名，支持会议选择/深链、会前编辑、动态清单、草案失败重试、EDIT 后再次确认、正式记录与行动项更新；浏览器仍只访问 Java `/api/v1/**`。
+- 自动化证据：固定 JDK 21 `./mvnw -B -ntp verify` **81 tests，0 failure/error/skip**，Jar、Spring Boot repackage 和 Spotless PASS；Python `uv sync --frozen --group dev`、Ruff、Mypy 41 source files、Pytest **138 passed**；前端 `npm ci`、`npm run type-check` 与生产构建 PASS（Vite 1892 modules，仅既有 Node engine warning）；两套 Compose `config --quiet`、Smoke 脚本 py_compile 和 `git diff --check` PASS。
+- 真实集成证据：`AGENT_MODEL_PROVIDER=fixture docker compose up -d --build --wait business-service agent-service frontend` PASS，MySQL 从 V8 增量迁移到 V9，当前 8 个长驻服务全部 healthy。`scripts/smoke-pre-post-meeting.py` 覆盖缺失材料到 READY、参与者越权、过期准备版本、Agent 草案、参会者审核越权、`EDIT` 不落正式表、`ACCEPT` 和负责人完成行动项并 PASS；`scripts/smoke-day6.py` 与 `scripts/smoke-employee-notifications.py` 回归 PASS。Smoke 创建的未来会议已通过公共 API 取消，没有删除或重置命名卷。
+- 浏览器证据：桌面和 390x844 移动视口均验证真实会前清单、议程/材料编辑控件、已接受纪要/决策/行动项和会议选择；两档均无横向溢出，控制台 0 error / 0 warning。浏览器只展开未保存表单并切换会议，没有写入测试数据。
+- Git 与边界：实施前版本已按用户要求提交为 `60ce87b feat(replan): complete resource failure recovery flow`；本节新增实现当前保留在未提交工作区，等待用户验收后决定是否提交。当前 Compose 明确使用确定性 fixture，本轮未调用真实 DeepSeek；第 22 节的 full-40 质量结论仍为 FAIL，不能被本轮结构化 fixture Smoke 覆盖。
+
 ## 2026-08-14 会议室资源失效、异常重排与约束变化闭环
 
 - 结论：**PASS。** 已按 `docs/16-exception-replanning-design.md` 落地完整闭环：会议室从 `ACTIVE` 变为 `INACTIVE` 时，Java 在同一事务内为该房间未来的 `CONFIRMED` 会议幂等创建异常单，只向会议发起人发送 `RESOURCE_UNAVAILABLE` 站内通知，不自动移动会议。原房间恢复时，仍使用该房间的 OPEN 异常单进入 `RESTORED`，并向发起人发送 `RESOURCE_RESTORED`。
