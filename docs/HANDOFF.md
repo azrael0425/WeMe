@@ -1,5 +1,16 @@
 # 项目开发交接
 
+## 2026-08-14 会议室资源失效、异常重排与约束变化闭环
+
+- 结论：**PASS。** 已按 `docs/16-exception-replanning-design.md` 落地完整闭环：会议室从 `ACTIVE` 变为 `INACTIVE` 时，Java 在同一事务内为该房间未来的 `CONFIRMED` 会议幂等创建异常单，只向会议发起人发送 `RESOURCE_UNAVAILABLE` 站内通知，不自动移动会议。原房间恢复时，仍使用该房间的 OPEN 异常单进入 `RESTORED`，并向发起人发送 `RESOURCE_RESTORED`。
+- 异常重排页：新增真实 `/replan` 列表、状态筛选、分页、详情、约束来源说明、同一时段 Top 3 可用会议室、候选选择与二次确认。快捷处理仅允许换房，Java 使用 `expectedMeetingVersion + expectedCaseVersion` 双版本校验并在同一事务内更新会议、时隙、通知和异常单；过期候选会返回稳定冲突并刷新，终态异常单只读。
+- 智能编排：异常单可将会议 ID、失效房间、继承约束和建议处理语句安全预填到 `/chat`，不会自动发送，也不会错误恢复旧任务。Python 将“异常重排/资源失效/会议室不可用”稳定归入 `MODIFY_MEETING -> RESCHEDULE`，显式定位目标会议，默认继承原时段、时长、必需/可选参会者和设备并排除失效房；无解续聊可增量处理“不再要求白板、允许顺延 30 分钟”，其余约束保持不变，最终仍复用 RESCHEDULE 的 HITL `ACCEPT/EDIT/REJECT`。
+- 数据、契约与并发：Flyway V8 新增 `meeting_replan_case` 和通知关联字段 `related_replan_case_id`；异常单唯一键为 `(meeting_id, failed_room_id, room_status_version)`。公共 API 新增列表、详情、候选和 resolve 四个端点，浏览器仍只访问 Java `/api/v1/**`。会议变更、取消与房间状态切换均带事务钩子和行锁，资源扫描与并发更新不会产生静默覆盖；错误码、DTO、前端类型和规范已同步。
+- 自动化证据：固定 JDK 21 `./mvnw -B -q verify` **76 tests，0 failure/error/skip**，Spotless、Jar 和 H2 Flyway V1-V8 PASS；Python `uv sync --frozen --group dev`、Ruff、Mypy 41 source files、Pytest **125 passed**；前端 `npm run type-check` 与生产构建 PASS（Vite 1894 modules）；两套 Compose `config --quiet` 和 `git diff --check` PASS。
+- 真实集成证据：`docker compose up -d --build --wait business-service agent-service frontend` PASS，MySQL 实际从 V7 迁移到 V8，当前 8 个长驻服务全部 healthy。`python scripts/smoke-exception-replan.py --public-base http://localhost` 覆盖异常单唯一性、仅发起人通知、参与者隔离、同时间硬约束 Top 3、双版本冲突和快捷换房终态并 PASS；`python scripts/smoke-employee-notifications.py --public-base http://localhost` 回归 PASS。
+- 浏览器证据：桌面和 390x844 移动视口均验证异常单详情、候选卡、双版本确认弹窗和智能编排入口；智能入口展示“已预填、尚未发送”提示，输入区包含目标会议及约束，未自动创建或发送 Agent 任务。移动端无横向溢出，控制台 0 error / 0 warning。验收产生的虚构会议均已取消、房间已恢复，不保留 OPEN 测试异常单；终态历史按审计设计保留，未删除或重置任何命名卷。
+- 边界与下一步：本切片没有阻塞项，也没有实现自动移动他人会议、真实邮件/日历或 IoT。异常重排的 Python 确定性回归与 UI 预填链路已验证，但本轮没有重新执行真实 DeepSeek 全量 40 条门禁；第 22 节记录的 full-40 质量结论仍为 FAIL，不得用本轮 fixture 结果覆盖。后续若继续提升模型质量，应只处理该门禁的失败分类并重跑 `core 12x3 + full 40x1`。
+
 ## 2026-08-14 管理员员工管理与全员站内会议通知
 
 - 结论：**PASS。** 已按 `docs/15-employee-and-notification-design.md` 完成员工管理、站内消息中心与会议通知闭环；浏览器仍只访问 Java `/api/v1/**`，没有新增 Python 直连、真实邮件、短信或外部日历能力。实施前的现有版本已单独提交为 `ab92baf feat(agent): complete requirement convergence and unsat evidence`。
