@@ -1,5 +1,17 @@
 # 项目开发交接
 
+## 2026-08-14 管理员员工管理与全员站内会议通知
+
+- 结论：**PASS。** 已按 `docs/15-employee-and-notification-design.md` 完成员工管理、站内消息中心与会议通知闭环；浏览器仍只访问 Java `/api/v1/**`，没有新增 Python 直连、真实邮件、短信或外部日历能力。实施前的现有版本已单独提交为 `ab92baf feat(agent): complete requirement convergence and unsat evidence`。
+- ADMIN 员工管理：新增 ACTIVE 部门选项、关键字/部门/角色/状态分页、详情、新增、编辑、启停和密码重置。用户名创建后不可改，用户名/邮箱数据库唯一，部门必须 ACTIVE；修改使用 `expectedVersion` 乐观锁，当前管理员不能停用或降权自己，密码只保存 BCrypt 哈希，停用账号的旧 JWT 在下一请求失效。
+- 站内消息：EMPLOYEE 与 ADMIN 均可分页查看本人的全部/未读/分类消息、查询未读数、单条已读和全部已读；ADMIN 也没有跨用户消息特权。前端新增全局消息入口、未读徽标、筛选、分页、失败重试与关联会议深链。
+- 会议通知：确认、变更、取消与会议业务处于同一事务；确认/取消接收人为组织者与当前参与者去重，变更接收人为修改前后组织者/参与者并集。草案、HOT PENDING、CONFLICT 和幂等重放不会伪造或重复成功通知；新通知标题和正文为中文。
+- 数据与安全：Flyway V7 新增 `sys_user.version`、邮箱唯一约束、通知用户/已读/时间复合索引，并将历史 `INACTIVE` 演示账号迁移为 `DISABLED`。公共 API、错误码、验收条件与测试矩阵已同步到 `docs/01-functional-spec.md`、`docs/03-java-backend-spec.md`、`docs/05-data-and-api-spec.md`、`docs/07-test-and-evaluation.md` 和 `SPEC.md`。
+- 自动化证据：固定 JDK 21 Maven `verify` **70 tests，0 failure/error/skip**，JAR、Spotless 与 H2 Flyway V1-V7 PASS；前端 `npm run type-check` 与生产构建 PASS（Vite 1895 modules）；Smoke 脚本 Ruff 与 py_compile PASS；基础/开发 Compose `config --quiet` 均 PASS。
+- 真实集成证据：最新 Java/前端镜像构建成功，真实 MySQL 从 V6 成功迁移到 V7，当前 8 个长驻服务全部 healthy。`python scripts/smoke-employee-notifications.py --public-base http://localhost` PASS，覆盖员工创建/编辑/密码重置/启停、EMPLOYEE RBAC、三类通知、跨用户隔离和已读幂等；`python scripts/smoke-day6.py --public-base http://localhost` 回归 PASS，覆盖手动会议、Agent SSE/HITL 和会议室 RBAC。
+- 浏览器证据：ADMIN 导航展示员工管理和未读徽标；18 名员工的桌面表格与 390x844 移动卡片均正确渲染；EMPLOYEE 不显示管理入口且直达 `/admin/employees` 会回到工作台；张三消息中心显示本轮三类中文通知，`查看会议` 成功打开 `/meetings?meetingId=127` 详情；控制台 0 error / 0 warning。
+- 未完成项与风险：本切片无阻塞项。宿主机仍只有 JDK 17，因此 Java 有效证据来自固定 `maven:3.9.11-eclipse-temurin-21` 和仓库 Dockerfile。未实现实时 WebSocket/SSE 推送；未读徽标在工作区壳加载、进入消息页和已读操作后刷新，符合当前方案的非实时站内消息边界。下一任务可继续处理 `docs/08-one-week-development-plan.md` 中尚未完成的非本切片验收项，不需要再次设计员工/通知契约。
+
 ## 2026-08-14 完整会议生命周期 Golden Path 与冲突重规划修复
 
 - 结论：已按 `docs/14-meeting-lifecycle-golden-path.md` 将“支付网关 V2 上线架构评审”设为会议 Agent 的当前 Golden Path，并完成创建需求收敛、改期目标识别、原会议约束继承、排除自身占用、结构化无解解释、推荐时间续聊重规划、取消和三类 HITL 草案链路。Prompt/State 已更新为 `meeting-agent-prompts-v7` / `meeting-agent-state-v6`，运行时 Agent 数量仍固定为 Supervisor + Requirement/Policy/Scheduling。

@@ -82,3 +82,4 @@
 - [测试与评测规范](docs/07-test-and-evaluation.md)
 - [一周开发计划](docs/08-one-week-development-plan.md)
 - [会议全生命周期 Golden Path](docs/14-meeting-lifecycle-golden-path.md)
+- [员工管理与站内会议通知](docs/15-employee-and-notification-design.md)
