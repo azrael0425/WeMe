@@ -1,5 +1,26 @@
 # 项目开发交接
 
+## 2026-08-15 RAG 会议制度文档浏览与管理员管理
+
+- 结论：**PASS。** 已按 `docs/20-rag-document-management-design.md` 增加真实知识库页面与管理闭环：EMPLOYEE/ADMIN 均可分页、搜索、分类筛选和查看 22 份会议制度完整正文；只有 ADMIN 可上传、编辑和删除。浏览器仍只调用 Java 公共 `/api/v1/**`，Java 以 Service Token + 每请求 AgentContextToken 代理 Python，Python 继续作为 RAG 元数据、正文和 Qdrant 索引的唯一事实源。
+- 管理语义：上传支持 UTF-8 Markdown 和文本型 PDF，单文件上限 5 MiB；Markdown 可在页面编辑完整 Front Matter 与正文并重建索引，`documentId` 不可变；PDF 展示提取文本但不做二进制在线编辑，需要删除后重新上传；扫描件不做 OCR。写操作使用 `recordVersion` 乐观锁，稳定错误码为 `RAG_DOCUMENT_NOT_FOUND/INVALID/CONFLICT`，Python/Qdrant 故障映射 `AGENT_UNAVAILABLE`。
+- 删除与恢复：删除先移除该 `documentId` 的 Qdrant points，再写 MySQL `DELETED` tombstone 并清空可浏览正文；CLI `rag-init` 会跳过 tombstone，避免被镜像内 seed 文档静默恢复。只有 ADMIN 再次显式上传相同 `documentId` 才会恢复，版本继续递增。迁移 `0004_add_rag_document_management.py` 已在真实 MySQL 增量执行，22 份文档重新建立 **307 个**检索片段。
+- 前端：新增 `/knowledge-documents` 与侧栏“知识库”入口，使用左右分栏的制度列表/正文阅读器；包含关键词、文档类型筛选、分页、索引状态、片段数、源文件和更新时间。管理员额外显示上传抽屉、Markdown 全文编辑抽屉和删除确认；普通员工 DOM 中不渲染写入控件。Nginx 两份运行配置均将请求体上限设为 6 MiB，以容纳 5 MiB 文件和 multipart 元数据。
+- 自动化证据：Python `uv run ruff check .`、`uv run mypy app`、`uv run pytest` PASS（**150 passed**，仅既有 LangGraph pending-deprecation warning）；固定 JDK 21 Maven `verify` PASS（**84 tests，0 failure/error/skip**，Spotless/Jar 通过）；前端 `npm run type-check` 和生产构建 PASS（Vite **1897 modules**）；基础与开发 Compose `config --quiet` 均 PASS。
+- 真实集成证据：`docker compose up -d --build --wait business-service agent-service frontend` PASS，业务、Agent、前端、MySQL、Redis、Qdrant 与 RocketMQ 长驻服务均 healthy；`scripts/smoke-rag-document-management.py` 通过 Java 公共 API 验证 22 份 seed 可读、员工上传 403、管理员上传→查看→编辑重建→删除全闭环。删除测试文档后再次运行 `rag-init`，22 份 seed 全部幂等跳过，`doc_rag_management_smoke` 仍返回 404，证明 tombstone 生效；测试文档已删除，仅保留其可审计 tombstone。
+- 浏览器证据：员工张三登录后可看到 22 份制度及完整正文，没有上传、编辑或删除按钮；管理员登录后可见上传入口、Markdown 全文编辑和删除按钮。桌面视口下长正文与编辑器均使用独立滚动区域，浏览器控制台 0 error / 0 warning；浏览器验收未修改正式制度文档。
+- 边界与后续：未增加 OCR、富文本编辑、附件下载、文档审批流、修订历史差异页或外部文件存储；PDF 更新继续采用删除后上传。当前没有实现阻塞；若继续增强，下一条具体任务是为知识库页面补充移动端 390×844 视觉回归与大文件/恶意 PDF 的集成安全门禁。
+
+## 2026-08-15 全功能演示、多轮对抗评测与 Agent 鲁棒性修复
+
+- 结论：**PASS。** 实施前的完整版本已按用户要求提交为 `649c070 feat(meetings): complete lifecycle and product workspace`。本轮新增 `docs/19-comprehensive-demo-and-adversarial-scenarios.md` 和 `scripts/evaluate-product-scenarios.py`，设计覆盖全产品的 12 条业务流程及 16 组可自动执行的多轮智能编排对抗场景；所有 Agent 请求均经 Java 公共 `/api/v1/**`，不直连 Python。
+- 对抗结果：真实 DeepSeek 公开 API 基线仅 **5/16**；修复路由、增量人员、续聊意图、只读工具补全、制度证据、英文/ISO 来源校验和循环预算后，最终 **16/16 PASS**，P50 14594.29ms、P95 26113.21ms。所有写入型草案均自动 REJECT，改期/取消目标做前后快照，报告不保存 JWT、确认令牌或原始 SSE。
+- 模型门禁：完整 live-model 40 条由 Tool 选择 85% / 引用有效率 83.33% 提升为 **Tool 100% / 引用 100%**；路由 100%、意图 100%、约束字段 F1 95.31%、来源违规 0、原生 Tool 协议 100%。基线/最终报告分别保存在 `artifacts/live-eval/component-full-baseline-20260815.json` 和 `component-full-final-20260815.json`。
+- 主要修复：制度问答使用完整证据且无证据固定诚实拒答；口语/中英混合创建、英文时段和 ISO 日期稳定识别；同轮 REMOVE+ADD 人员合并；无解后的“那改到”保持 CREATE；只读查询在同一 Tool Gate/Trace 中补齐缺失事实；loop 上限与 Schema 统一为 6；Java SSE 超时改为可配置 300000ms；HOT fixture/Smoke 不再写死扩容前房间 ID。
+- 全功能回归：Day 5、Day 6、员工/消息、异常重排、会前会后五套 Smoke 均 PASS；测试产生的未来会议已取消，误留会议 170 经核对后也通过公共 API 取消，未删除或重置命名卷。最终 Python Ruff/Mypy 41 sources/Pytest **146 passed**；固定 JDK 21 Java `verify` **82 tests，0 failure/error/skip**；前端 `npm ci`、type-check、Vite build **1895 modules**；Compose config 和 `git diff --check` PASS。
+- 浏览器证据：真实工作台提交“公司是不是规定周五下午绝对不能开会？没有制度依据就直接说没查到。”，Run `run_5dc8406019254a8f8b6e3732d68e9011` 完成并显示“未找到可验证的会议制度证据”，无引用、无正式写入，控制台 0 error/0 warning。
+- 环境与风险：项目继续运行在 `http://localhost`，最终容器恢复为 `AGENT_MODEL_PROVIDER=deepseek`、`AGENT_CALLBACK_ENABLED=false`。完整 HOT 回调演示需临时开启该开关；live model 仍具有非确定性且 16 条样本不代表自然语言穷尽，后续每次改 Prompt/模型/Tool Schema 都应重跑 16+40 门禁。
+
 ## 2026-08-15 前端成品化与真实演示工作区
 
 - 结论：**PASS。** 已按 `docs/18-frontend-productization-and-demo-workspace.md` 完成全部用户可见主路径的成品化整改。智能编排、待我确认、我的会议、会议室、消息中心、异常重排和会前会后均移除重复说明、时区标签、预览措辞及内部编号；会议类型、房型、状态和人员选择统一为中文产品表达。旧静态 `preview.ts`、Product Preview 标识和静态会前会后路由已删除。
