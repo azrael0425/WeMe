@@ -1,5 +1,13 @@
 # 项目开发交接
 
+## 2026-08-15 演示验收运行手册与 RAG 证据门槛修复
+
+- 结论：**PASS。** 已新增 [`docs/21-demo-acceptance-runbook.md`](21-demo-acceptance-runbook.md)，以 18 个按页面执行的场景覆盖登录/RBAC、会议室可用性、RAG 引用与无答案、只读查询、多轮创建、HITL 三分支、改期取消、无解与组织边界、手动 CRUD、并发/幂等、HOT + Outbox + RocketMQ + checkpoint、通知、管理员管理、资源故障重排、会前会后、知识库与报表/Trace；每一步给出可复制输入、预期 UI/Trace 证据、脚本和清理边界。README 已补入口。
+- 真实演练发现并修复一项 RAG 证据边界：原“周五下午绝对不能开会”在现有 22 份正式制度中已有“工作日 09:00–18:00 可直接预约”的反证，不能再作为无答案样本；同时检索可能取到标题为“RAG 找不到依据”的检索说明段落。`QdrantPolicyRetriever` 现排除这类不能证明业务规则的元说明段，回归样本改为“每月最后一个周五开会必须穿蓝色衣服”，并在对抗场景文档中说明原因。
+- 自动化与运行证据：`uv run ruff check app/rag/policies.py tests/test_rag_ingestion.py`、`uv run mypy app`、`uv run pytest -q` 均 PASS（**153 passed**，仅既有 LangGraph pending-deprecation warning）；`python scripts/evaluate-product-scenarios.py --public-base http://localhost --case policy-vip-grounded --case policy-unknown-honesty` 为 **2/2 PASS**；`python scripts/smoke-day5.py --public-trace` 为 **PASS**（候选/HITL EDIT/ACCEPT/Trace、预约完成、HOT 冲突恢复）；`python scripts/smoke-day6.py --public-base http://localhost` 为 **PASS**（20 间 ACTIVE 房、手动会议 CRUD、SSE/HITL/Trace、房间 RBAC）。
+- 运行状态：基础 Compose 长驻服务均 healthy，入口为 `http://localhost`；本次演示临时以进程环境变量令 `AGENT_CALLBACK_ENABLED=true`，未改写或提交 `.env`，用于展示 HOT 回调恢复。停止时不要使用 `down -v`；运行手册含安全的停止命令。
+- 下一条具体任务：按 `docs/21-demo-acceptance-runbook.md` 进行现场验收；演示结束后如不需 HOT 回调，可用常规 `.env` 配置重建业务服务恢复默认开关。
+
 ## 2026-08-15 RAG 本地 BGE-M3 核心升级
 
 - 结论：**PASS。** 生产 RAG 已由 64 维确定性 hash 替换为宿主机 `D:/rag001/bge-m3` 的本地 BGE-M3 dense embedding；输出 1024 维归一化向量。运行时 Agent 数量仍固定为 Supervisor + Requirement/Policy/Scheduling，Retriever 继续是确定性节点；未增加稀疏混合检索、ColBERT、Rerank、OCR、查询分解或新的 RAG 评测体系。
