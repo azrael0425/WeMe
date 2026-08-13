@@ -1,5 +1,15 @@
 # 项目开发交接
 
+## 2026-08-15 RAG 本地 BGE-M3 核心升级
+
+- 结论：**PASS。** 生产 RAG 已由 64 维确定性 hash 替换为宿主机 `D:/rag001/bge-m3` 的本地 BGE-M3 dense embedding；输出 1024 维归一化向量。运行时 Agent 数量仍固定为 Supervisor + Requirement/Policy/Scheduling，Retriever 继续是确定性节点；未增加稀疏混合检索、ColBERT、Rerank、OCR、查询分解或新的 RAG 评测体系。
+- 统一链路：新增共享 Embedding Provider，`rag-init`、管理员上传/编辑和 Policy 查询全部复用同一配置与进程缓存。常驻 API 在 startup lifespan 中预热 BGE-M3，容器实测约 28 秒完成后才对外 healthy，避免首个制度问答承担冷启动；模型以只读挂载和 Hugging Face/Transformers offline 模式加载。依赖锁定为 `sentence-transformers==5.6.1` 与 CPU `torch==2.13.0`。
+- 非破坏迁移：生产集合改为 `meeting_policies_bge_m3_v1`，保留旧集合不删除；集合维度不匹配会明确拒绝写入。相同 checksum 只有在目标集合已存在同 `documentId + checksum + embeddingModel` points 时才跳过，因此既有 22 条 `rag_document` 可在新集合重建且不递增管理 `recordVersion`。运行时不再自动注入 4 条内置 seed，它们仅保留给 `InMemoryPolicyRetriever` 单元测试。
+- 文档语义：完整 Markdown/PDF 提取正文仍保存在 `rag_document.content_text` 并可在知识库页面查看；每份文档的“RAG 测试问题”及子章节不生成 Qdrant point。真实迁移结果为 **22 份文档、285 个 points、22 个 documentId、1024 维、统一 `bge-m3-local-dense-v1` payload、0 个测试问题 chunk**；旧索引曾有 307 chunks，减少的 22 个正好对应每份文档一个测试问题章节。
+- 部署：`.env.example`、本机被忽略的 `.env`、Compose 和部署文档已同步 BGE-M3 路径与新集合；`rag-init` 为 5 GiB / 4 CPU 的一次性任务并禁用不适用的 API healthcheck，`agent-service` 为 5 GiB / 2 CPU。首次重建成功后再次运行 `rag-init` 在约 8 秒内得到 **indexed=0 / skipped=22**。当前 Agent、Java、前端、MySQL、Redis、Qdrant 和 RocketMQ 长驻服务全部 healthy，旧集合与所有命名卷均未删除。
+- 自动化证据：`uv sync --frozen --group dev`、Ruff、Mypy（44 source files）和 Pytest **153 passed**；真实宿主模型探针得到 dimension=1024、norm=1.0；Python 镜像构建 PASS，基础/开发 Compose `config --quiet` 与 `git diff --check` PASS。公共 Java SSE 定向问答“VIP会议室有什么使用规则？”以 `SUCCEEDED` 完成，经过 Supervisor + Policy 并返回 3 条“VIP 与高管会议室使用规则”引用；知识库管理 Smoke 验证员工只读与 ADMIN 上传→编辑→删除闭环 PASS。
+- 边界与后续：本轮按用户要求没有做 RAG 质量评测。旧 `scripts/smoke-day4.py` 的首段仍断言调度请求必须直接 `run.completed`，与当前多轮需求收敛语义不一致，因而会在进入 Policy 段前失败；本轮改用只读公共 Policy 定向 Smoke 完成 RAG 验收。下一条任务可在 Agent 功能稳定后再联合建设 RAG 评测，不需要继续扩大当前检索架构。
+
 ## 2026-08-15 RAG 会议制度文档浏览与管理员管理
 
 - 结论：**PASS。** 已按 `docs/20-rag-document-management-design.md` 增加真实知识库页面与管理闭环：EMPLOYEE/ADMIN 均可分页、搜索、分类筛选和查看 22 份会议制度完整正文；只有 ADMIN 可上传、编辑和删除。浏览器仍只调用 Java 公共 `/api/v1/**`，Java 以 Service Token + 每请求 AgentContextToken 代理 Python，Python 继续作为 RAG 元数据、正文和 Qdrant 索引的唯一事实源。
