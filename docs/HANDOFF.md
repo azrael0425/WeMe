@@ -1,5 +1,12 @@
 # 项目开发交接
 
+## 2026-08-15 第一人称参会人确定性解析
+
+- 结论：**PASS。** 修复“帮我和李四开会”仅在需求摘要中显示李四的问题。Requirement 在模型抽取后以确定性规则识别“我和/我跟/我与/和我/包括我/我必须参加”等明确参会表达，并标记 `includesCurrentUser`；需求卡片与澄清事实显示“当前登录用户（我）”。模型不取得或伪造用户姓名/ID，排期、忙闲和草案仍只使用已验证 AgentContext 的 `userId`，因此当前用户与显式姓名共同成为必需参会人。
+- 同时补齐“开一小时会”的创建意图兜底，避免模型首轮路由不稳定时把该自然表达误判为泛澄清。Prompt/State 版本更新为 `meeting-agent-prompts-v11` / `meeting-agent-state-v7`，历史 Run 保留原版本。
+- 证据：新增确定性回归覆盖原句的参会人摘要与 Route fallback；`uv run ruff check …`、`uv run mypy app`、`uv run pytest -q` 均 PASS（**154 passed**，仅既有 LangGraph pending-deprecation warning）。重建 `agent-service` 后，通过真实公共 SSE 提交原句得到 `WAITING_USER_INPUT`（仅因“2点”仍需区分上午/下午），并验证事件内参会人摘要为“2人：当前登录用户（我）、李四”。
+- 演示手册 S08 已同步预期。当前 Agent、Java 服务保持 healthy；本次不创建正式会议、未修改 `.env` 或命名卷。
+
 ## 2026-08-15 演示验收运行手册与 RAG 证据门槛修复
 
 - 结论：**PASS。** 已新增 [`docs/21-demo-acceptance-runbook.md`](21-demo-acceptance-runbook.md)，以 18 个按页面执行的场景覆盖登录/RBAC、会议室可用性、RAG 引用与无答案、只读查询、多轮创建、HITL 三分支、改期取消、无解与组织边界、手动 CRUD、并发/幂等、HOT + Outbox + RocketMQ + checkpoint、通知、管理员管理、资源故障重排、会前会后、知识库与报表/Trace；每一步给出可复制输入、预期 UI/Trace 证据、脚本和清理边界。README 已补入口。

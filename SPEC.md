@@ -32,7 +32,7 @@
 17. DeepSeek 使用 OpenAI-compatible 原生 `tools/tool_calls`；模型 Tool 参数必须经 Pydantic Schema、业务上下文约束、权限/风险策略和重复调用指纹校验后才能执行。
 18. Requirement Agent 内部采用 Evaluator-Optimizer：先生成结构化需求，再由确定性语义评估器检查时间基准、字段完整性和跨字段一致性，最多携带结构化反馈修复一次；Evaluator 不是新的产品 Agent。
 19. Scheduling Agent 对 Java 并发冲突生成结构化修复反馈，保留原硬约束、排除失败候选并最多重规划2次；超过预算必须进入可解释终态或重新请求用户决策，不允许无限循环。
-20. 自然语言字段必须保留来源忠实度：人数只决定容量，不得自动扩写为姓名；显式姓名、时间、时长、设施与 intent 必须经确定性 Source Fidelity Evaluator 核对，缺失标题和会议类型使用稳定默认值，不要求无意义澄清。
+20. 自然语言字段必须保留来源忠实度：人数只决定容量，不得自动扩写为姓名；显式姓名、时间、时长、设施与 intent 必须经确定性 Source Fidelity Evaluator 核对。第一人称“我”仅在明确参会表达（如“我和李四”“我必须参加”）中由已鉴权会话确定性映射为当前登录用户，模型不得伪造身份；缺失标题和会议类型使用稳定默认值，不要求无意义澄清。
 21. Agent 的 CREATE、RESCHEDULE、CANCEL 使用可辨别草案结构和各自的确认 Tool；改期保留未编辑字段并显示 Before/After，取消显示目标会议。任何 EDIT 都必须作废旧 token、重新读取事实并生成新 token，三类草案在 ACCEPT 前均不得改变正式会议。
 22. 真实模型质量门禁独立于 fixture：组件评测与 Compose 完整轨迹分别报告 provider/model、Prompt/Schema 版本、重复次数、终态、失败分类、延迟与 API Token；未配置 Key 或未实际执行必须标记 SKIPPED/FAIL，不能用 fixture PASS 替代。
 23. 创建会议的需求收敛采用服务端持久化的多轮槽位状态：时间窗口、会议时长和必需参会范围是进入 Scheduling 前的刚需；标题、会议类型、地点和设备可以使用已冻结的安全默认。`WAITING_USER_INPUT` 只能通过独立补充输入动作恢复，不能与 HITL `ACCEPT/EDIT/REJECT` 混用。
