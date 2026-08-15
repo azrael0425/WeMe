@@ -1,5 +1,12 @@
 # 项目开发交接
 
+## 2026-08-15 冲突双方与重叠时段说明
+
+- 结论：**PASS。** 无解冲突不再仅显示“某资源被占用”。Agent 现在逐条说明“本次待排请求（请求窗口、连续时长）”与“必需参会者或会议室的已有安排（可见会议 ID、占用时段）”的双方关系，并计算实际重叠时段和原因。例如会明确说明“本次待排请求…与李四的已有安排（会议 500）冲突…重叠时段为…”。不披露其他会议标题或参会名单。
+- 前端 `UnsatAnalysisCard` 同步改为四行冲突对照：本次待排请求、冲突对象、重叠时段、冲突原因；恢复视图继续复用同一 `unsatAnalysis` 结构。无解摘要、SSE 契约和 Agent 规范均已同步。
+- 证据：新增无解回归断言，验证成对说明、会议 ID 与实际重叠时段；`uv run ruff check .`、`uv run mypy app` 和 `uv run pytest -q` 均 PASS（**154 passed**，仅既有 LangGraph pending-deprecation warning）。前端 `npm run type-check`、`npm run build`、`docker compose config --quiet` 与 `git diff --check` 均 PASS。
+- 运行状态：已重建 `agent-service` 和 `frontend`，并刷新本地页面；Agent、前端与 Java 服务均 healthy。本次没有创建或修改正式会议、未修改 `.env` 或命名卷。
+
 ## 2026-08-15 第一人称参会人确定性解析
 
 - 结论：**PASS。** 修复“帮我和李四开会”仅在需求摘要中显示李四的问题。Requirement 在模型抽取后以确定性规则识别“我和/我跟/我与/和我/包括我/我必须参加”等明确参会表达，并标记 `includesCurrentUser`；需求卡片与澄清事实显示“当前登录用户（我）”。模型不取得或伪造用户姓名/ID，排期、忙闲和草案仍只使用已验证 AgentContext 的 `userId`，因此当前用户与显式姓名共同成为必需参会人。
