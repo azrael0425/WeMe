@@ -2,7 +2,8 @@
 
 ## 1. 文档状态与执行边界
 
-- 状态：已按本规范实现并验收；实现证据见 `docs/HANDOFF.md`。
+- 状态：已实施的历史 UI 设计基线，仅保留信息架构与视觉决策；当前功能状态以 `SPEC.md`、`docs/16-exception-replanning-design.md`、`docs/17-pre-post-meeting-closure-design.md`、`docs/18-frontend-productization-and-demo-workspace.md` 和 `docs/HANDOFF.md` 为准。
+- 保留原因：当前前端仍沿用本文的 Refero 布局、信息层级和视觉 Token；文中已被真实业务闭环取代的 Product Preview 描述不再是执行指令。
 - 设计定版日期：2026-08-13（Asia/Shanghai）。
 - 修改范围：`frontend/**`；实现完成后由主 Agent 更新 `docs/HANDOFF.md`。
 - 本阶段不修改 Java、Python、Compose 拓扑或跨服务 API 契约。
@@ -110,10 +111,6 @@ Refero 页面用于研究真实产品的布局、信息层级和交互模式，�
 
 ```text
 MeetOps
-  新建编排
-  搜索会话
-  最近任务（当前标签页可恢复的 thread/run）
-
 工作台
   智能编排
   待我确认
@@ -121,17 +118,27 @@ MeetOps
 协作
   我的会议
   会议室
+  消息中心
+  异常重排
+  会前会后
+  知识库
+
+管理（仅管理员）
+  员工管理
 
 系统
   运行记录（没有列表 API 时不创建伪数据；从具体 Run 进入）
 
-产品预览
-  异常重排
-  会前会后
+会话
+  新建编排
+  搜索会话
+  最近任务（当前标签页可恢复的 thread/run）
 
 底部
   用户、部门、角色、退出
 ```
+
+会话操作跟在主要功能与当前运行入口之后，并与它们共享同一侧栏滚动区域；不再为会话区保留固定高度的顶部区域。
 
 约束：
 
