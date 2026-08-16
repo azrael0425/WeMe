@@ -4,8 +4,8 @@
 
 - 最后更新：2026-08-15（Asia/Shanghai）。
 - 冻结基线：`SPEC.md` 1.3；浏览器只访问 Java，Java 是业务事实源，Python 负责固定的 Supervisor + Requirement/Policy/Scheduling、OR-Tools、RAG、HITL 和恢复。
-- 当前分支：`main`；本轮清理前基线提交为 `d82f7b7 fix(frontend): constrain recent tasks to sidebar top`。
-- 当前修改：项目清理与侧栏调整已提交为 `f29b21e`；工作区未提交内容包含参会人姓名输入、账号隔离会话恢复、待确认草案恢复、RAG/Agent 首问性能修复，以及第 11 节的双场景演示准备。演示准备不改变服务边界或拓扑。
+- 当前分支：`main`；本轮 Agent 评测 V2 开始前基线为 `d9c164e feat: finalize WeMe demo workflow and recovery`。
+- 当前修改：工作区未提交内容为第 20 节 Agent 评测 V2 的 120 题语料、评分器、脚本、文档和脱敏证据；没有修改 Java、Frontend 或跨服务 API 契约。
 - 运行环境：基础 Compose 的 Java、Python、前端、MySQL、Redis、Qdrant 和 RocketMQ 长驻服务当前均为 `healthy`；仅前端发布到宿主机 `http://localhost`。未删除数据库或命名卷，浏览器已停在张三账号的空白“新建编排”页面。
 
 ## 2. 已交付能力
@@ -20,10 +20,10 @@
 ## 3. 最新可复现证据
 
 - Java：最新后端变更的 JDK 21 Maven `verify` 为 **87 tests，0 failure/error/skip**，Spotless/Jar PASS。
-- Python：最新 Agent 回归为 Ruff、Mypy PASS，Pytest **158 passed**（仅既有 LangGraph pending-deprecation warning）。
+- Python：最新 Agent 回归为 Ruff、Mypy PASS，Pytest **165 passed**（仅既有 LangGraph pending-deprecation warning）。
 - Frontend：最新 `npm run type-check` 与 `npm run build` PASS。
-- 真实模型：`artifacts/live-eval/component-full-final-20260815.json` 的 40 条完整门禁为 Route/Intent/Tool/Native Tool/Citation 100%、Constraint F1 95.31%、Source Fidelity Violation 0。
-- 公开 API 多轮对抗：`artifacts/product-scenario-evaluation.json` 为 **16/16 PASS**；基线报告为 `artifacts/product-scenario-evaluation-baseline.json`。
+- 真实模型 V2：`artifacts/agent-eval-v2/` 包含 120 题 full、30×3 core 和统一报告；core PASS（Task/Stable 96.67%），full Task Success 93.33% 但因 2 条来源忠实度违规和 Policy 全对门禁失败。
+- 产品轨迹 V2：隔离 Tool/HITL **8/8 PASS**；公开 API 多轮固定集 **13/16**，因此统一发布门禁诚实记录为 **FAIL**。
 - 演示验收入口：`docs/21-demo-acceptance-runbook.md`；本轮双场景逐步手册：`docs/22-two-scenario-demo-runbook.md`；最终报告入口：`docs/REPORTS.md`。
 
 ## 4. 2026-08-15 项目清理
@@ -183,3 +183,17 @@ Maven 首次验证会重建 `business-service/target/`，uv 会重建 `agent-ser
 - 已删除张三与管理员的 342 条站内会议通知，并把 133 张遗留 `PENDING` 预约草案统一转为 `REJECTED`；其他员工通知和既有业务审计记录保留。
 - 清理后数据库复核显示 Agent 最近任务六张运行表均为 0、演示账号通知为 0、待确认草案为 0、checkpoint Redis DB 大小为 0；`rag_document` 仍为 23 条，Alembic/Flyway 分别保持 0006/V13。
 - `python scripts/demo-two-scenarios.py status` 返回 `ready: true`、无残留演示会议和失效房间。浏览器实测张三侧栏没有最近任务，消息中心显示空态，最终停在 `http://localhost/chat` 的空白“新建编排”页。
+
+## 20. 2026-08-15 Agent 评测 V2（120 题）
+
+- 新增版本化数据集 `agent-eval-v2-120`：120 条唯一中文题，类别固定为普通预约 28、多人协调 18、复杂约束 18、推荐/冲突 14、Policy 14、修改/取消 18、偏好/澄清 10；难度 72 EASY / 36 MEDIUM / 12 HARD；切分 80 DEV / 20 VALIDATION / 20 HOLDOUT；覆盖全部 7 个 Intent。
+- Python component fixture 报告升级为 v3，新增数据集版本、difficulty/split/tags、分组成功率和语料完整性校验；真实模型 component 新增 `casePass`、`uniqueCases`、`samples`、`taskSuccessRate`、`stableCaseRate`、`plannedToolSetAccuracy`。旧 `toolSelectionAccuracy` 只作兼容别名，不再声称是观测 Tool 轨迹。
+- 新增 `scripts/Run-AgentEvaluationV2.ps1` 与统一报告生成器。单命令依次执行 fixture、重建 Agent 镜像、DeepSeek core 30×3、full 120×1、8 条隔离 Tool/HITL 和 16 条公共 API 多轮，并生成 `artifacts/agent-eval-v2/summary.json` 与 `report.md`；某套件失败时仍先保留证据再汇总失败。
+- Fixture 实测：120/120，Intent/Constraint/Planned Tool/Citation/Component Task Success 均 100%，192 个 OR-Tools 候选硬约束违规 0，网络调用 0。该结果只代表确定性组件回归，不是 DeepSeek 或 E2E 成绩。
+- DeepSeek core：90 样本，Task Success 96.67%、Stable Case 29/30（96.67%）、Route 100%、Intent/Planned Tool 96.67%、Constraint F1 100%、Source Violation 0、Citation/Native Tool 100%，P50/P95 3.22s/4.13s。`recommend-006` 三次都发生只读共同空闲意图误判。
+- DeepSeek full：120 样本，Task Success 93.33%、Route 97.50%、Intent 95.00%、Constraint F1 100%、Planned Tool 97.50%、Citation/Native Tool 100%，P50/P95 3.65s/4.99s；8 个 case 未完全通过，Source Fidelity Violation=2 且 Policy 未全部正确路由，full 状态为 FAIL。
+- 产品轨迹：隔离 8/8 PASS，覆盖缺字段澄清、Policy 引用、CREATE/MODIFY/CANCEL 的 ACCEPT/REJECT 和不存在目标的安全拒绝；公共 API 多轮 13/16（81.25%），失败为中英混合创建进入澄清、明确 ID 改期进入澄清、歧义目标未先澄清。统一门禁最终为 **FAIL**，没有通过修改冻结 VALIDATION/HOLDOUT 或反复挑选最好一次来追分。
+- 安全：所有 JSON 已通过敏感字段扫描，不含 Access Token、confirmationToken、Service Token、API Key 或 Bearer 值；轨迹脚本只通过公共 API 创建/确认/取消隔离会议，最终清理确认会议，不直接删库或删除 Docker 卷。
+- 验证命令：`uv run ruff check .` PASS；`uv run mypy app` PASS（44 source files）；`uv run pytest` PASS（165 passed，1 个既有 warning）；根脚本单元测试 5 passed；`docker compose config --quiet` PASS；一键真实评测已完整执行并按门禁以非零退出，所有五份原始证据和统一 FAIL 报告均已落盘。
+- 当前限制：统一报告运行时工作区含本轮未提交变更，因此证据记录 `workingTreeDirty=true`。若要作为最终对外审计快照，应先提交评测实现，再在同一 commit、同一模型/Prompt/Schema 上完整重跑，不能覆盖本轮失败基线。
+- 下一条具体任务：优先修复 `recommend-006` 的 FIND_COMMON_TIME/RECOMMEND_ROOM 边界、Policy/mutation 路由与三条公共 API 多轮失败；提升 Prompt/Agent 版本后完整重跑 V2，而不是修改冻结测试答案。
